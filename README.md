@@ -2,6 +2,8 @@
 
 PyNEST implementation of the clock network proposed by Maes et al. 2020 [1]
 
+![](clock_network.png)
+
 # Software dependencies
 
 To meet the software requirements, create and activate the conda environment ```clock_network```:
