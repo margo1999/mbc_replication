@@ -2,7 +2,9 @@
 
 PyNEST implementation of the clock network proposed by Maes et al. 2020 [1]
 
-![](clock_network.png)
+&nbsp;
+
+<img src="clock_network.png" width="800" height="400" />Maes et al. 2020
 
 # Software dependencies
 
