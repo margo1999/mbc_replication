@@ -2,7 +2,7 @@ import os
 import sys
 from joblib import Parallel, delayed
 
-from shtm import helper 
+from clock_net import helper 
 
 def sim(i):
     os.system("python %s 0 %d 0" % (simulation_script, i))
