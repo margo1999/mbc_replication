@@ -1,2 +1,2 @@
-from shtm import model
-from shtm import helper
+from clock_net import model
+from clock_net import helper
