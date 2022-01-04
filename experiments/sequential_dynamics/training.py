@@ -3,7 +3,7 @@ This script instantiates the Clock Network model, creates, connects, and simulat
 
 Authors
 ~~~~~~~
-Jette Oberländer, Younes Bouhadjar
+Jette Oberlaender, Younes Bouhadjar
 """
 
 import nest
@@ -64,8 +64,8 @@ def generate_reference_data():
     
     # store connections before learning
     if params['store_connections']:
-        model_instance.save_connections(fname='ee_connections_before')
-
+        model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections_before')
+    time_store_connection_before = time.time()
     # ###############################################################
     # simulate the network
     # ===============================================================
@@ -74,26 +74,33 @@ def generate_reference_data():
 
     # store connections after learning
     if params['store_connections']:
-        model_instance.save_connections(fname='ee_connections')
+        model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections')
+    time_store_connection_after = time.time()
 
     print(
         '\nTimes of Rank {}:\n'.format(
             nest.Rank()) +
-        '  Total time:          {:.3f} s\n'.format(
-            time_simulate -
+        '  Total time:                 {:.3f} s\n'.format(
+            time_store_connection_after -
             time_start) +
-        '  Time to initialize:  {:.3f} s\n'.format(
+        '  Time to initialize:         {:.3f} s\n'.format(
             time_model -
             time_start) +
-        '  Time to create:      {:.3f} s\n'.format(
+        '  Time to create:             {:.3f} s\n'.format(
             time_create -
             time_model) +
-        '  Time to connect:     {:.3f} s\n'.format(
+        '  Time to connect:            {:.3f} s\n'.format(
             time_connect -
             time_create) +
-        '  Time to simulate:    {:.3f} s\n'.format(
+        '  Time to store connections:  {:.3f} s\n'.format(
+            time_store_connection_before -
+            time_connect) +    
+        '  Time to simulate:           {:.3f} s\n'.format(
             time_simulate -
-            time_connect))
+            time_store_connection_before) +
+        '  Time to store connections:  {:.3f} s\n'.format(
+            time_store_connection_after -
+            time_simulate))
 
 
 generate_reference_data()

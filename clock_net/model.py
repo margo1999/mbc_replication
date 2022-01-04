@@ -6,7 +6,7 @@ to build, connect and simulate the network.
 
 Authors
 ~~~~~~~
-Jette Oberländer, Younes Bouhadjar
+Jette Oberlaender, Younes Bouhadjar
 """
 
 import random
@@ -14,6 +14,10 @@ import nest
 import copy
 import numpy as np
 from collections import defaultdict
+import sys
+from tqdm import tqdm
+from nest import voltage_trace
+import matplotlib.pyplot as plt
 
 from clock_net import helper
 
@@ -55,6 +59,8 @@ class Model:
             self.data_path = helper.get_data_path(self.params['data_path'], self.params['label'], 'replay')
         else:
             self.data_path = helper.get_data_path(self.params['data_path'], self.params['label'])
+        print(f"{self.params['label']=}")
+        print(f"{self.data_path=}")
 
         if nest.Rank() == 0:
             if self.data_path.is_dir():
@@ -66,9 +72,10 @@ class Model:
                 message = "Directory has been created."
             print("Data will be written to: {}\n{}\n".format(self.data_path, message))
 
-        # set network size
-        self.num_subpopulations = params['M']
-        self.num_exc_neurons = params['n_E'] * self.num_subpopulations
+        # set network size parameters
+        self.num_exc_neurons = params['num_exc_neurons']
+        self.num_inh_neurons = params['num_inh_neurons']
+        self.num_exc_clusters = params['num_exc_clusters']
 
         # initialize RNG        
         np.random.seed(self.params['seed'])
@@ -77,15 +84,15 @@ class Model:
         # input stream: sequence data
         self.sequences = sequences
         self.vocabulary = vocabulary
-        self.length_sequence = len(self.sequences[0])
+        self.length_sequence = len(self.sequences[0]) # TODO: possible that sequences do not have the same length
         self.num_sequences = len(self.sequences)
 
         # initialize the NEST kernel
         self.__setup_nest()
 
         # get time constant for dendriticAP rate
-        self.params['soma_params']['tau_h'] = self.__get_time_constant_dendritic_rate(
-            calibration=self.params['calibration'])
+        #self.params['exhibit_params']['tau_h'] = self.__get_time_constant_dendritic_rate(
+        #    calibration=self.params['calibration'])
 
     def __setup_nest(self):
         """Initializes the NEST kernel.
@@ -109,22 +116,23 @@ class Model:
 
         print('\nCreating and configuring nodes...')
 
-        # create excitatory population
-        self.__create_neuronal_populations()
-
-        # compute timing of the external inputs and recording devices
-        # TODO: this function should probably not be part of the model
-        excitation_times, excitation_times_dict = self.__compute_timing_external_inputs(self.params['DeltaT'], 
-                                                                                        self.params['DeltaT_seq'], 
-                                                                                        self.params['DeltaT_cue'], 
-                                                                                        self.params['excitation_start'], 
-                                                                                        self.params['time_dend_to_somatic'])
-
-        # create spike generators
-        self.__create_spike_generators(excitation_times_dict)
+        # create excitatory and inhibitory population of RNN
+        self.__create_RNN_populations()
 
         # create recording devices
-        self.__create_recording_devices(excitation_times)
+        self.__create_recording_devices()
+
+        # create spike generators
+        self.__create_spike_generators()
+
+        #TODO: Can this be deleted?
+        # compute timing of the external inputs and recording devices
+        # TODO: this function should probably not be part of the model
+        # excitation_times, excitation_times_dict = self.__compute_timing_external_inputs(self.params['DeltaT'], 
+        #                                                                                 self.params['DeltaT_seq'], 
+        #                                                                                 self.params['DeltaT_cue'], 
+        #                                                                                 self.params['excitation_start'], 
+        #                                                                                 self.params['time_dend_to_somatic'])
 
     def connect(self):
         """Connects network and devices
@@ -138,148 +146,115 @@ class Model:
         else:
             self.__connect_excitatory_neurons()
 
-            # connect inhibitory population (II, EI, IE)
-        self.__connect_inhibitory_neurons()
+        # connect inhibitory population (II, EI, IE)
+        self.__connect_RNN_neurons()
 
         # connect external input
-        self.__connect_external_inputs_to_subpopulations()
+        self.__connect_external_inputs_to_clusters()
 
         # connect neurons to the spike recorder
-        nest.Connect(self.exc_neurons, self.spike_recorder_soma)
-        nest.Connect(self.inh_neurons, self.spike_recorder_inh)
-
-        # set min synaptic strength
-        #self.__set_min_synaptic_strength()
+        self.__connect_neurons_to_spike_recorders()
+        
+        print('All nodes connected!')
 
     def simulate(self):
         """Run simulation.
         """
 
+        sim_time = self.params['sim_time']
+
         # the simulation time is set during the creation of the network  
         if nest.Rank() == 0:
-            print('\nSimulating {} ms.'.format(self.sim_time))
+            print('\nSimulating {} ms.'.format(sim_time))
 
-        nest.Simulate(self.sim_time)
+        #TODO: set actual loop, current is only for testing
+        #nest.Prepare()
+        for i in tqdm(range(1)):
+            assert (i*sim_time) == nest.biological_time
 
-    def __create_neuronal_populations(self):
+            nest.Simulate(sim_time)
+            #nest.Run(sim_time)
+
+            # for generator_exc in self.external_node_to_exc_neuron_dict.values():
+            #     generator_exc.stop += sim_time
+            #     generator_exc.start += sim_time
+            #     print(generator_exc.origin)
+
+            # for generator_inh in self.external_node_to_inh_neuron_list:
+            #     generator_inh.stop += sim_time
+            #     generator_inh.start += sim_time
+
+            for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
+                generators_to_exc[0].origin += sim_time
+                generators_to_exc[1].origin += sim_time
+
+            for generator_to_inh in self.external_node_to_inh_neuron_list:
+                generator_to_inh.origin += sim_time
+                
+        #nest.Cleanup()
+
+        #voltage_trace.from_device(self.voltmeter)
+        #plt.show()
+        
+
+    def __create_RNN_populations(self):
         """'Create neuronal populations
         """
 
         # create excitatory population
-        self.exc_neurons = nest.Create(self.params['soma_model'],
+        self.exc_neurons = nest.Create(self.params['exhibit_model'],
                                        self.num_exc_neurons,
-                                       params=self.params['soma_params'])
+                                       params=self.params['exhibit_params'])
+        print(f"Create {self.num_exc_neurons=} excitatory neurons")
+        print(nest.network_size)
 
         # create inhibitory population
         self.inh_neurons = nest.Create(self.params['inhibit_model'],
-                                       self.params['n_I'] * self.num_subpopulations,
+                                       self.num_inh_neurons,
                                        params=self.params['inhibit_params'])
+        print(f"Create {self.num_inh_neurons=} inhibitory neurons")
+        print(nest.network_size)
 
-    def __create_spike_generators(self, excitation_times_dict):
+    def __create_spike_generators(self):
         """Create spike generators
         """
+        self.external_node_to_exc_neuron_dict = {}
+        self.external_node_to_inh_neuron_list = []
+        cluster_stimulation_time = self.params['cluster_stimulation_time']
+        stimulation_gap = self.params['stimulation_gap']
 
-        self.input_excitation_dict = {}
-        for char in self.vocabulary:
-            self.input_excitation_dict[char] = nest.Create('spike_generator')
+        #TODO: At the moment there is one Poisson generator for all exc_clusters per stimulation -> Constraint: rate is for all 4.5 -> paper shows contrdiction
+        for stimulation_step in range(self.num_exc_clusters):
+            external_input_per_step_list = []
+            start = stimulation_step * (cluster_stimulation_time + stimulation_gap)
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ex'])))
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['inh_rate_ex'])))
+            self.external_node_to_exc_neuron_dict[stimulation_step] = external_input_per_step_list
+            self.external_node_to_inh_neuron_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ix'])))
 
-        # set spike generator status with the above computed excitation times
-        for char in self.vocabulary:
-            nest.SetStatus(self.input_excitation_dict[char], {'spike_times': excitation_times_dict[char]})
-
-    def __create_recording_devices(self, excitation_times):
+        # TODO: set spike generator status with the above computed excitation times (see Younes code above)
+        
+    def __create_recording_devices(self):
         """Create recording devices
         """
 
+        #TODO: Should the params dictionary also be in parameters_space?
         # create a spike recorder for exc neurons
         self.spike_recorder_soma = nest.Create('spike_recorder', params={'record_to': 'ascii',
-                                                                         'label': 'somatic_spikes'})
+                                                                         'label': 'exh_spikes'})
+        print('Create 1 spike recorder for soma')
+        print(nest.network_size)
 
         # create a spike recorder for inh neurons
         self.spike_recorder_inh = nest.Create('spike_recorder', params={'record_to': 'ascii',
                                                                'label': 'inh_spikes'})
+        print('Create 1 spike recorder for inh')
+        print(nest.network_size)
 
-    def __compute_timing_external_inputs(self, DeltaT, DeltaT_seq, DeltaT_cue, excitation_start, time_dend_to_somatic):
-        """
-        Specifies the excitation times of the external input for each sequence element,
-        subsequent sequence elements are presented  with  inter-stimulus interval DeltaT,  
-        subsequent sequences are separated in time by an inter-sequence time interval DeltaT_seq,
-        during the replay, the presented cues are seperated by an intercue time interval Delta_cue,
-        In addition this function saves the times at which a dendritic current should be recorded,
-        we don't want to record the dendritic current every time step as this consumes a lot of memory,
-        so we instead record the dendritic current every 'episodes_to_testing' episodes,
-        recording the dendritic current is essential for computing the prediction performance,
-        the dendritic current is saved only at the time of last element in the sequence,
-        this is because when assessing the prediction performance, we compute the prediction error 
-        only with respect to the last element in the sequence
-        
-        Parameters
-        ---------
-        DeltaT               : float
-        DeltaT_seq           : float
-        DeltaT_cue           : float 
-        excitation_start     : float
-        time_dend_to_somatic : float
+        self.spike_recorder_generator = nest.Create('spike_recorder', params={'record_to': 'ascii',
+                                                               'label': 'generator_spikes'})
 
-        Returns:
-        --------
-        excitation_times: list(float)
-        excitation_times_soma: dict
-        """
-
-        #TODO adapt for the case of the clock network
-        excitation_times_soma = defaultdict(list)
-
-        excitation_times = []
-        sim_time = excitation_start
-        for le in range(self.params['learning_episodes'] + 1):
-
-            for seq_num, sequence in enumerate(self.sequences):
-                len_seq = len(sequence)
-                for i, char in enumerate(sequence):
-
-                    if i != 0:
-                        sim_time += DeltaT
-
-                    # store time of excitation for each symbol
-                    excitation_times_soma[char] += [sim_time]
-
-                    excitation_times.append(sim_time)
-
-                    if self.params['evaluate_replay']:
-                        break
-
-                # set timing between sequences
-                if self.params['evaluate_replay']:
-                    sim_time += DeltaT_cue
-                else:
-                    sim_time += DeltaT_seq
-
-        # save data
-        if self.params['evaluate_performance'] or self.params['evaluate_replay']:
-            np.save('%s/%s' % (self.data_path, 'excitation_times_soma'),
-                    excitation_times_soma)
-            np.save('%s/%s' % (self.data_path, 'excitation_times'), excitation_times)
-
-        self.sim_time = sim_time
-        return excitation_times, excitation_times_soma
-
-    def __get_subpopulation_neurons(self, index_subpopulation):
-        """Get neuron's indices (NEST NodeCollection) belonging to a subpopulation
-        
-        Parameters
-        ---------
-        index_subpopulation: int
-
-        Returns
-        -------
-        NEST NodeCollection
-        """
-
-        neurons_indices = [int(index_subpopulation) * self.params['n_E'] + i for i in
-                           range(self.params['n_E'])]
-
-        return self.exc_neurons[neurons_indices]
+        self.voltmeter = nest.Create('voltmeter')
 
     def __connect_excitatory_neurons(self):
         """Connect excitatory neurons
@@ -288,103 +263,71 @@ class Model:
         nest.Connect(self.exc_neurons, self.exc_neurons, conn_spec=self.params['conn_dict_ee'],
                      syn_spec=self.params['syn_dict_ee'])
 
-    def __connect_inhibitory_neurons(self):
-        """Connect inhibitory neurons
+    def __connect_RNN_neurons(self):
+        """Create II, EI, IE connections
         """
+        # II connection
+        nest.Connect(self.inh_neurons, self.inh_neurons, conn_spec=self.params['conn_dict_ii'], syn_spec=self.params['syn_dict_ii'])
 
-        for k, subpopulation_index in enumerate(range(self.num_subpopulations)):
-            # connect inhibitory population 
-            subpopulation_neurons = self.__get_subpopulation_neurons(subpopulation_index)
+        # EI connection
+        nest.Connect(self.inh_neurons, self.exc_neurons, conn_spec=self.params['conn_dict_ei'], syn_spec=self.params['syn_dict_ei'])
 
-            # connect neurons within the same mini-subpopulation to the inhibitory population
-            nest.Connect(subpopulation_neurons, self.inh_neurons[k], syn_spec=self.params['syn_dict_ie'])
+        # IE connection
+        nest.Connect(self.exc_neurons, self.inh_neurons, conn_spec=self.params['conn_dict_ie'], syn_spec=self.params['syn_dict_ie'])
 
-            # connect the inhibitory neurons to the neurons within the same mini-subpopulation
-            nest.Connect(self.inh_neurons[k], subpopulation_neurons, syn_spec=self.params['syn_dict_ei'])
-
-    def __connect_external_inputs_to_subpopulations(self):
+    def __connect_external_inputs_to_clusters(self):
         """Connect external inputs to subpopulations
         """
 
-        # get input encoding
-        self.characters_to_subpopulations = self.__stimulus_preference(fname='characters_to_subpopulations')
+        exc_cluster_size = self.params['exc_cluster_size']
 
-        # save characters_to_subpopulations for evaluation
-        if self.params['evaluate_performance'] or self.params['evaluate_replay']:
-            fname = 'characters_to_subpopulations'
-            np.save('%s/%s' % (self.data_path, fname), self.characters_to_subpopulations)
+        # connect to excitatory neurons
+        for cluster_index, external_nodes in self.external_node_to_exc_neuron_dict.items():
+            first_neuron = cluster_index * exc_cluster_size
+            last_neuron = (first_neuron + exc_cluster_size) - 1
+            external_node_exc = external_nodes[0]
+            external_node_inh = external_nodes[1]
+            nest.Connect(external_node_exc, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_exc'], syn_spec=self.params['syn_dict_ex_exc'])
+            if first_neuron > 0:
+                nest.Connect(external_node_inh, self.exc_neurons[: first_neuron], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])
+            if (last_neuron+1) < len(self.exc_neurons):
+                nest.Connect(external_node_inh, self.exc_neurons[(last_neuron+1):], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])     
+        
+        # connect to inhibitory neurons
+        for external_node in self.external_node_to_inh_neuron_list:
+            nest.Connect(external_node, self.inh_neurons, conn_spec=self.params['conn_dict_ix'], syn_spec=self.params['syn_dict_ix'])
 
-        for char in self.vocabulary:
-            subpopulations_indices = self.characters_to_subpopulations[char]
-
-            # receptor type 1 correspond to the feedforward synapse of the 'iaf_psc_exp_multisynapse' model
-            for subpopulation_index in subpopulations_indices:
-                subpopulation_neurons = self.__get_subpopulation_neurons(subpopulation_index)
-                nest.Connect(self.input_excitation_soma[char], subpopulation_neurons,
-                             self.params['conn_dict_ex'], syn_spec=self.params['syn_dict_ex'])
-
-    def __stimulus_preference(self, fname='characters_to_subpopulations'):
-        """Assign a subset of subpopulations to a each element in the vocabulary.
-
-        Parameters
-        ----------
-        fname : str
-
-        Returns
-        -------
-        characters_to_subpopulations: dict
+    def __connect_neurons_to_spike_recorders(self):
+        """Connect excitatory neurons to spike recorders
         """
+        nest.Connect(self.exc_neurons, self.spike_recorder_soma)
+        nest.Connect(self.inh_neurons, self.spike_recorder_inh)
+        #import pdb; pdb.set_trace()
+        for i in range(self.num_exc_clusters):
+            nest.Connect(self.external_node_to_exc_neuron_dict[i][0], self.spike_recorder_generator)
+            nest.Connect(self.external_node_to_exc_neuron_dict[i][1], self.spike_recorder_generator)
+            nest.Connect(self.external_node_to_inh_neuron_list[i], self.spike_recorder_generator)
+        nest.Connect(self.voltmeter, self.exc_neurons)
 
-        if len(self.vocabulary) * self.params['L'] > self.num_subpopulations:
-            raise ValueError(
-                "num_subpopulations needs to be large than length_user_characters*num_subpopulations_per_character")
-
-        characters_to_subpopulations = defaultdict(list)  # a dictionary that assigns mini-subpopulation to characters
-
-        subpopulation_indices = np.arange(self.num_subpopulations)
-        # permuted_subpopulation_indices = np.random.permutation(subpopulation_indices)
-        permuted_subpopulation_indices = subpopulation_indices
-        index_characters_to_subpopulations = []
-
-        if self.params['load_connections']:
-            # load connectivity: from characters to mini-subpopulations
-            path = helper.get_data_path(self.params['data_path'], self.params['label'])
-            characters_to_subpopulations = load_input_encoding(path, fname)
-        else:
-            for char in self.vocabulary:
-                # randomly select a subset of mini-subpopulations for a character
-                characters_to_subpopulations[char] = permuted_subpopulation_indices[:self.params['L']]
-                # delete mini-subpopulations from the permuted_subpopulation_indices that are already selected
-                permuted_subpopulation_indices = permuted_subpopulation_indices[self.params['L']:]
-
-        return characters_to_subpopulations
-
-    def __set_min_synaptic_strength(self):
-        """Set synaptic Wmin
-        """
-
-        print('\nSet min synaptic strength ...')
-        connections = nest.GetConnections(synapse_model=self.params['syn_dict_ee']['synapse_model'])
- 
-        syn_model = self.params['syn_dict_ee']['synapse_model']
-        if syn_model == 'stdsp_synapse' or syn_model == 'stdsp_synapse_rec':
-            connections.set({'Pmin': connections.permanence})
-        else:
-            connections.set({'Wmin': connections.weight})
-
-    def save_connections(self, fname='ee_connections'):
+    def save_connections(self, synapse_model=None, fname='ee_connections'):
         """Save connection matrix
 
         Parameters
         ----------
-        label: str
+        synapse_model: str (mandatory)
+            name of synapse model 
+        fname: str
             name of the stored file
         """
 
         print('\nSave connections ...')
-        connections_all = nest.GetConnections(synapse_model=self.params['syn_dict_ee']['synapse_model'])
+        assert synapse_model is not None, "Need parameter synapse_model!"
 
-        if self.params['syn_dict_ee']['synapse_model'] == 'stdsp_synapse':
+        #connections_all = nest.GetConnections(synapse_model=self.params['syn_dict_ee']['synapse_model'])
+        connections_all = nest.GetConnections(synapse_model=synapse_model)
+
+    #TODO replace stdsp_synapse by clopath_synapse
+        if synapse_model== 'stdsp_synapse':
             connections = nest.GetStatus(connections_all, ['target', 'source', 'weight', 'permanence'])
         else:
             connections = nest.GetStatus(connections_all, ['target', 'source', 'weight'])
@@ -463,6 +406,153 @@ class Model:
         print("\nDuration of a sequence set %d ms" % t_exc)
 
         return target_firing_rate * t_exc
+    
+    def __set_min_synaptic_strength(self):
+        """Set synaptic Wmin
+        """
+
+        print('\nSet min synaptic strength ...')
+        connections = nest.GetConnections(synapse_model=self.params['syn_dict_ee']['synapse_model'])
+ 
+        syn_model = self.params['syn_dict_ee']['synapse_model']
+        if syn_model == 'stdsp_synapse' or syn_model == 'stdsp_synapse_rec':
+            connections.set({'Pmin': connections.permanence})
+        else:
+            connections.set({'Wmin': connections.weight})
+
+    
+    def __stimulus_preference(self, fname='characters_to_subpopulations'):
+        """Assign a subset of subpopulations to a each element in the vocabulary.
+
+        Parameters
+        ----------
+        fname : str
+
+        Returns
+        -------
+        characters_to_subpopulations: dict
+        """
+
+        if len(self.vocabulary) * self.params['L'] > self.num_exc_clusters:
+            raise ValueError(
+                "num_subpopulations needs to be large than length_user_characters*num_subpopulations_per_character")
+
+        characters_to_subpopulations = defaultdict(list)  # a dictionary that assigns mini-subpopulation to characters
+
+        subpopulation_indices = np.arange(self.num_exc_clusters)
+        # permuted_subpopulation_indices = np.random.permutation(subpopulation_indices)
+        permuted_subpopulation_indices = subpopulation_indices
+        index_characters_to_subpopulations = []
+
+        if self.params['load_connections']:
+            # load connectivity: from characters to mini-subpopulations
+            path = helper.get_data_path(self.params['data_path'], self.params['label'])
+            characters_to_subpopulations = load_input_encoding(path, fname)
+        else:
+            for char in self.vocabulary:
+                # randomly select a subset of mini-subpopulations for a character
+                characters_to_subpopulations[char] = permuted_subpopulation_indices[:self.params['L']]
+                # delete mini-subpopulations from the permuted_subpopulation_indices that are already selected
+                permuted_subpopulation_indices = permuted_subpopulation_indices[self.params['L']:]
+
+        return characters_to_subpopulations
+
+    def __get_cluster_neurons(self, index_cluster):
+        """Get neuron's indices (NEST NodeCollection) belonging to a subpopulation
+        
+        Parameters
+        ---------
+        index_subpopulation: int
+
+        Returns
+        -------
+        NEST NodeCollection
+        """
+
+        neurons_indices = [int(index_cluster) * self.params['exc_cluster_size'] + i for i in
+                           range(self.params['exc_cluster_size'])]
+
+        return self.exc_neurons[neurons_indices]
+    
+    def __compute_timing_external_inputs(self, DeltaT, DeltaT_seq, DeltaT_cue, excitation_start, time_dend_to_somatic):
+        """
+        Specifies the excitation times of the external input for each sequence element,
+        subsequent sequence elements are presented  with  inter-stimulus interval DeltaT,  
+        subsequent sequences are separated in time by an inter-sequence time interval DeltaT_seq,
+        during the replay, the presented cues are seperated by an intercue time interval Delta_cue,
+        In addition this function saves the times at which a dendritic current should be recorded,
+        we don't want to record the dendritic current every time step as this consumes a lot of memory,
+        so we instead record the dendritic current every 'episodes_to_testing' episodes,
+        recording the dendritic current is essential for computing the prediction performance,
+        the dendritic current is saved only at the time of last element in the sequence,
+        this is because when assessing the prediction performance, we compute the prediction error 
+        only with respect to the last element in the sequence
+        
+        Parameters
+        ---------
+        DeltaT               : float
+        DeltaT_seq           : float
+        DeltaT_cue           : float 
+        excitation_start     : float
+        time_dend_to_somatic : float
+
+        Returns:
+        --------
+        excitation_times: list(float)
+        excitation_times_soma: dict
+        """
+
+        #TODO adapt for the case of the clock network
+        excitation_times_soma = defaultdict(list)
+
+        excitation_times = []
+        sim_time = excitation_start
+        for le in range(self.params['learning_episodes'] + 1):
+
+            for seq_num, sequence in enumerate(self.sequences):
+                len_seq = len(sequence)
+                for i, char in enumerate(sequence):
+
+                    if i != 0:
+                        sim_time += DeltaT
+
+                    # store time of excitation for each symbol
+                    excitation_times_soma[char] += [sim_time]
+
+                    excitation_times.append(sim_time)
+
+                    if self.params['evaluate_replay']:
+                        break
+
+                # set timing between sequences
+                if self.params['evaluate_replay']:
+                    sim_time += DeltaT_cue
+                else:
+                    sim_time += DeltaT_seq
+
+        # save data
+        if self.params['evaluate_performance'] or self.params['evaluate_replay']:
+            np.save('%s/%s' % (self.data_path, 'excitation_times_soma'),
+                    excitation_times_soma)
+            np.save('%s/%s' % (self.data_path, 'excitation_times'), excitation_times)
+
+        self.sim_time = sim_time
+        return excitation_times, excitation_times_soma
+
+    def __create_spike_generators_old(self, excitation_times_dict):
+        """Create spike generators
+        """
+
+        self.input_excitation_dict = {}
+        for char in self.vocabulary:
+            self.input_excitation_dict[char] = nest.Create('spike_generator')
+            print('WARNING')
+            print(nest.network_size)
+            sys.exit(1)
+
+        # set spike generator status with the above computed excitation times
+        for char in self.vocabulary:
+            nest.SetStatus(self.input_excitation_dict[char], {'spike_times': excitation_times_dict[char]})
 
 
 ##############################################

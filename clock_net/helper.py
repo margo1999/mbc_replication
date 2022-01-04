@@ -3,7 +3,7 @@ Helper functions of the Clock Network model
 
 Authors
 ~~~~~~~
-Jette Oberländer, Younes Bouhadjar
+Jette Oberlaender, Younes Bouhadjar
 """
 
 import os
@@ -11,10 +11,11 @@ import sys
 import copy
 import hashlib
 import numpy as np
+import random
 from pathlib import Path
 from pprint import pformat
-from collections import Counter
-
+from collections import Counter, defaultdict
+from datetime import datetime
 
 ###############################################################################
 def psp_max_2_psc_max(psp_max, tau_m, tau_s, R_m):
@@ -69,7 +70,8 @@ def generate_sequences(params, data_path, fname):
 
     task_name = params['task_name']
     task_type = params['task_type']
- 
+    #length_seq = params['length_sequence']
+
     # set of characters used to build the sequences
     vocabulary = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
                   'U', 'V', 'W', 'X', 'Y', 'Z'][:params['vocab_size']]
@@ -164,57 +166,57 @@ def derived_parameters(params):
     params = copy.deepcopy(params)
 
     # connection rules for EE connections
-    params['conn_dict_ee'] = {}
-    params['conn_dict_ee']['rule'] = params['rule']
-    params['conn_dict_ee']['indegree'] = int(params['connection_prob'] *
-                                                  params['M'] *
-                                                  params['n_E'])
-    params['conn_dict_ee']['allow_autapses'] = False
-    params['conn_dict_ee']['allow_multapses'] = False
+    # params['conn_dict_ee'] = {}
+    # params['conn_dict_ee']['rule'] = params['rule']
+    # params['conn_dict_ee']['indegree'] = int(params['connection_prob'] *
+    #                                               params['M'] *
+    #                                               params['n_E'])
+    # params['conn_dict_ee']['allow_autapses'] = False
+    # params['conn_dict_ee']['allow_multapses'] = False
 
     # compute neuron's membrane resistance
-    params['R_m_soma'] = params['soma_params']['tau_m'] / params['soma_params']['C_m']
-    params['R_m_inhibit'] = params['inhibit_params']['tau_m'] / params['inhibit_params']['C_m']
+    # params['R_m_soma'] = params['exhibit_params']['tau_m'] / params['exhibit_params']['C_m']
+    # params['R_m_inhibit'] = params['inhibit_params']['tau_m'] / params['inhibit_params']['C_m']
 
     # compute psc max from the psp max
-    params['J_IE_psp'] = 1.2 * params['inhibit_params']['V_th']         # inhibitory PSP as a response to an input from E neuron
+    #params['J_IE_psp'] = 1.2 * params['inhibit_params']['V_th']         # inhibitory PSP as a response to an input from E neuron
 
-    if params['evaluate_replay']:
-        params['J_IE_psp'] /= params['n_E']
-    else:
-        params['J_IE_psp'] /= params['pattern_size']        
+    # if params['evaluate_replay']:
+    #     params['J_IE_psp'] /= params['n_E']
+    # else:
+    #     params['J_IE_psp'] /= params['pattern_size']        
 
-    params['syn_dict_ex']['weight'] = psp_max_2_psc_max(params['J_EX_psp'], params['soma_params']['tau_m'],
-                                                   params['soma_params']['tau_syn1'], params['R_m_soma'])
-    params['syn_dict_ie']['weight'] = psp_max_2_psc_max(params['J_IE_psp'], params['inhibit_params']['tau_m'],
-                                                   params['inhibit_params']['tau_syn_ex'],
-                                                   params['R_m_inhibit'])
-    params['syn_dict_ei']['weight'] = psp_max_2_psc_max(params['J_EI_psp'], params['soma_params']['tau_m'],
-                                                   params['soma_params']['tau_syn3'], params['R_m_soma'])
+    # params['syn_dict_ex']['weight'] = psp_max_2_psc_max(params['J_EX_psp'], params['exhibit_params']['tau_m'],
+    #                                                params['exhibit_params']['tau_syn1'], params['R_m_soma'])
+    # params['syn_dict_ie']['weight'] = psp_max_2_psc_max(params['J_IE_psp'], params['inhibit_params']['tau_m'],
+    #                                                params['inhibit_params']['tau_syn_ex'],
+    #                                                params['R_m_inhibit'])
+    # params['syn_dict_ei']['weight'] = psp_max_2_psc_max(params['J_EI_psp'], params['exhibit_params']['tau_m'],
+    #                                                params['exhibit_params']['tau_syn3'], params['R_m_soma'])
 
     # set initial weights (or permanences in the case of the structural synapse)
-    import nest
-    if params['syn_dict_ee']['synapse_model'] == 'stdsp_synapse':
-        params['syn_dict_ee']['permanence'] = nest.random.uniform(min=params['p_min'], max=params['p_max']) 
-    else:
-        params['syn_dict_ee']['weight'] = nest.random.uniform(min=params['w_min'], max=params['w_max'])
+    # import nest
+    # if params['syn_dict_ee']['synapse_model'] == 'stdsp_synapse':
+    #     params['syn_dict_ee']['permanence'] = nest.random.uniform(min=params['p_min'], max=params['p_max']) 
+    # else:
+    #     params['syn_dict_ee']['weight'] = nest.random.uniform(min=params['w_min'], max=params['w_max'])
 
-    params['syn_dict_ee']['dt_max'] = -2.*params['DeltaT']              # maximum time lag for the STDP window 
-    params['DeltaT_seq'] = 2.5*params['DeltaT']                         # inter-sequence interval
+    # params['syn_dict_ee']['dt_max'] = -2.*params['DeltaT']              # maximum time lag for the STDP window 
+    # params['DeltaT_seq'] = 2.5*params['DeltaT']                         # inter-sequence interval
     
     # clamp DeltaT_seq if it exceeds the duration of the dAP
-    if params['DeltaT_seq'] < params['soma_params']['tau_dAP']:
-        params['DeltaT_seq'] = params['soma_params']['tau_dAP']
+    # if params['DeltaT_seq'] < params['exhibit_params']['tau_dAP']:
+    #     params['DeltaT_seq'] = params['exhibit_params']['tau_dAP']
      
-    print('\n#### postsynaptic potential ####')
-    print('PSP maximum J_EX psp:  %f mV' % params['J_EX_psp'])
-    print('PSP maximum J_IE psp:  %f mV' % params['J_IE_psp'])
-    print('PSP maximum J_EI psp:  %f mV' % params['J_EI_psp'])
+    # print('\n#### postsynaptic potential ####')
+    # print('PSP maximum J_EX psp:  %f mV' % params['J_EX_psp'])
+    # print('PSP maximum J_IE psp:  %f mV' % params['J_IE_psp'])
+    # print('PSP maximum J_EI psp:  %f mV' % params['J_EI_psp'])
 
-    print('\n#### postsynaptic current ####')
-    print('PSC maximum J_EX:  %f pA' % params['syn_dict_ex']['weight'])
-    print('PSC maximum J_IE:  %f pA' % params['syn_dict_ie']['weight'])
-    print('PSC maximum J_EI:  %f pA' % params['syn_dict_ei']['weight'])
+    # print('\n#### postsynaptic current ####')
+    # print('PSC maximum J_EX:  %f pA' % params['syn_dict_ex']['weight'])
+    # print('PSC maximum J_IE:  %f pA' % params['syn_dict_ie']['weight'])
+    # print('PSC maximum J_EI:  %f pA' % params['syn_dict_ei']['weight'])
 
     return params
 
@@ -262,6 +264,7 @@ def parameter_set_list(P):
     for z in P.iter_inner():
         p = copy.deepcopy(dict(z))
         l.append(p)
+        #l[-1]['label'] = str(datetime.now())
         l[-1]['label'] = hashlib.md5(pformat(l[-1]).encode(
             'utf-8')).hexdigest()  ## add md5 checksum as label of parameter set (used e.g. for data file names) 
 
@@ -312,7 +315,8 @@ def copy_scripts(pars, fname):
     print("\tCopying Python scripts to data folder ...")
     data_path = get_data_path(pars)
     os.system('mkdir -p %s' % (data_path))
-    os.system('cp -r --backup=t  %s %s/%s' % (fname, data_path, 'parameters_space.py'))
+    #os.system('cp -r --backup=t  %s %s/%s' % (fname, data_path, 'parameters_space.py'))
+    os.system('cp -r %s %s/%s' % (fname, data_path, 'parameters_space.py'))
     # os.system('mv %s/%s %s/%s' % (dat_path,fname,dat_path,'sim_'+fname))
 
 
@@ -545,7 +549,7 @@ def compute_prediction_performance(somatic_spikes, dendriticAP, dendriticAP_reco
             idx_q = np.where((dendriticAP[:, 1] < rc_time + params['idend_record_time'] + 1.) & 
                                (dendriticAP[:, 1] > rc_time))[0]
 
-            idx_dAP = np.where(dendriticAP[:, 2][idx_q] > params['soma_params']['I_p'] - 1.)[0]
+            idx_dAP = np.where(dendriticAP[:, 2][idx_q] > params['exhibit_params']['I_p'] - 1.)[0]
             
             senders_dAP = dendriticAP[:, 0][idx_q][idx_dAP]
  
