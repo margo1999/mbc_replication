@@ -2,121 +2,147 @@ import parameters as para
 import numpy as np
 
 DELAY = 0.1
+TEST_NETWORK = True # The test network has fewer nodes than the orginal network, therefore it makes it faster to simulate and easier to debug
 
 p = para.ParameterSpace({})
 
 ###################################################### general parameters for RNN ######################################################
-p['num_exc_neurons'] = 240                                             # Number of recurrent E neurons
-p['num_inh_neurons'] = 60                                              # Number of recurrent I neurons
-p['num_exc_clusters'] = 8                                              # Number of exciatatory clusters
-p['exc_cluster_size'] = p['num_exc_neurons'] // p['num_exc_clusters']   # Number of excitatory neurons in one cluster
-p['connection_p'] = 0.2                                                 # Recurrent network connection probability
+if(not TEST_NETWORK):
+    p['num_exc_neurons'] = 2400                                             # Number of recurrent E neurons
+    p['num_inh_neurons'] = 600                                              # Number of recurrent I neurons
+    p['num_exc_clusters'] = 80                                              # Number of exciatatory clusters
+    p['exc_cluster_size'] = p['num_exc_neurons'] // p['num_exc_clusters']   # Number of excitatory neurons in one cluster
+    p['connection_p'] = 0.2                                                 # Recurrent network connection probability
+    print('The orginal size of the network is used!') 
+else:    
+    p['num_exc_neurons'] = 240                                              # Number of recurrent E neurons
+    p['num_inh_neurons'] = 60                                               # Number of recurrent I neurons
+    p['num_exc_clusters'] = 8                                               # Number of exciatatory clusters
+    p['exc_cluster_size'] = p['num_exc_neurons'] // p['num_exc_clusters']   # Number of excitatory neurons in one cluster
+    p['connection_p'] = 0.2                                                 # Recurrent network connection probability
+    print('A smaller size of the network is used!')                                                 
 
 ###################################################### all node models ######################################################
 
-#TODO: replace model by actual model
-# parameters of excitatory neurons
+#TODO: Replace model by actual model -> aeif_cond_alpha_clopath + different kernel
+# Parameters of excitatory neurons
 p['exhibit_model'] = 'aeif_psc_delta_clopath'
-p['exhibit_params'] = {'A_LTD': 0.0014,        #! check if this is equal to 0.0014 pA mV^-2 LTD amplitude for voltage-based STDP  !not the same
-                    'A_LTP': 0.0008,        #! check if this is equal to 0.0008 pA mV^-1 LTP amplitude  !not the same
-                    'C_m': 300.0,           # Capacitance of the membrane 
-                    'V_reset': -60.0,       # Reset potential (for all neurons the same) default value: -60
-                   #'V_th': -52.0,          # Adaptive spike initiation threshold
-                   'V_peak': 1000.0,
-                   'V_th_max': 1000.0,         
-                   'V_th_rest': 1000.0,         
-                    't_ref': 5.0,            # absolute refactory period
-                    'V_m': -60.0
+p['exhibit_params'] = {'A_LTD': 0.0014,         # LTD amplitude (pa/mV)
+                    'A_LTP': 0.0008,            # LTP amplitude (pa/mV^2)
+                    'C_m': 300.0,               # Capacitance of the membrane (pF)
+                    'V_reset': -60.0,           # Reset potential (for all neurons the same) (mV)
+                    'V_peak': -52.0,            # Spike detection threshold (mV)
+                    'V_th_max': -52.0 + 10.0,   # Maximum threshold that can be reached (mV) - V_th_max = V_th_rest + A_T, where A_T is adaptive threshold increase constant          
+                    'V_th_rest': -52.0,         # Threshold V_th is relaxing back to V_th_rest (mV) 
+                    't_ref': 5.0,               # Absolute refactory period (ms)
+                    'a': 0.0,                   # Subthreshold adaption (nS) - keep zero so it matches equation (3) in Maes et al. (2020)
+                    'b':1000.0,                 # Adaption current increase constant (pA)
+                    'Delta_T': 2.0,             # Exponential slope (mV)
+                    'tau_w': 100.0,             # Adaption current time constant (ms)
+                    'I_sp': 0.0,                # Depolarizing spike afterpotential current magnitude (pA)
+                    'z': 0.0,                   # Spike-adaptation current (pA)
+                    'I_e': 0.0,                 # Constant external input current (pA)
+                    'E_L': -70.0,               # Leak reversal potential aka resting potential (mV)
+                    'g_L': 300.0 / 20.0,        # Leak conductance (mV) - g_L = C_m / tau_E, where tau_E is membrane potential time constant
+                    'tau_syn_ex': 1.0,          # Rise time of the excitatory synaptic alpha function aka rise time constant (ms)
+                    'tau_syn_in': 6.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant(ms)
+                    # 'V_m':                    # Membrane potential (mV) - TODO: Should V_m also be set?
                     }
-print(p['exhibit_params'])
+assert(p['exhibit_params']['V_th_max'] == (p['exhibit_params']['V_th_rest']+ 10.0))
+assert(p['exhibit_params']['g_L'] == (p['exhibit_params']['C_m'] / 20.0))
 
-#TODO: replace model by actual model
-# parameters of inhibitory neurons
-p['inhibit_model'] = 'iaf_psc_exp'
-p['inhibit_params'] = {}
-p['inhibit_params']['C_m'] = 300.0          # membrane capacitance (pF)
-p['inhibit_params']['E_L'] = 0.0            # resting membrane potential (mV)
-p['inhibit_params']['I_e'] = 0.0            # external DC currents (pA)
-p['inhibit_params']['V_reset'] = -60.0        # reset potential (mV)
-p['inhibit_params']['V_m'] = p['inhibit_params']['V_reset']            # initial potential (mV)
-p['inhibit_params']['V_th'] = 1000.0          # spike threshold (mV)
-p['inhibit_params']['t_ref'] = 5.0          # refractory period
-p['inhibit_params']['tau_m'] = 20.0          # membrane time constant (ms)
-p['inhibit_params']['tau_syn_ex'] = 0.5     # synaptic time constant of an excitatory input (ms) 
-p['inhibit_params']['tau_syn_in'] = 1.65    # synaptic time constant of an inhibitory input (ms)
+#TODO: Replace model by actual model -> iaf_cond_alpha + different kernel
+# Parameters of inhibitory neurons
+p['inhibit_model'] = 'iaf_cond_alpha'
+p['inhibit_params'] = {'C_m': 300.0,            # Capacitance of the membrane (pF)
+                    'E_L': -62.0,               # Leak reversal potential aka resting potential (mV)
+                    'E_ex': 0.0,                # Excitatory reversal potential (mV)
+                    'E_in': -75.0,              # Inhibitory reversal potential (mV)
+                    'g_L': 300.0 / 20.0,        # Leak conductance (mV) - g_L = C_m / tau_E, where tau_I is membrane potential time constant
+                    'I_e': 0.0,                 # Constant external input current (pA)          
+                    'V_reset': -60.0,           # Reset potential (for all neurons the same) (mV)
+                    'V_th': -52.0,              # Spike threshold (mV)
+                    't_ref': 5.0,               # Absolute refactory period (ms)
+                    'tau_syn_ex': 0.5,          # Rise time of the excitatory synaptic alpha function aka rise time constant (ms)
+                    'tau_syn_in': 2.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant (ms)
+                    # 'V_m':                    # Membrane potential (mV) - TODO: Should V_m also be set?
+                    }
+assert(p['inhibit_params']['g_L'] == (p['inhibit_params']['C_m'] / 20.0))
 
-# TODO: external poisson generator for excitatory neurons
-p['exh_rate_ex'] = 0.0 #18000.0
-p['inh_rate_ex'] = 0.0 #4500.0
+# TODO: External poisson generator for excitatory neurons
+# Parameters of poisson generator to excitatory neurons
+p['exh_rate_ex'] = 0.0                          # = 18000.0 Rate of external excitatory input to excitatory neurons (spikes/s)
+p['inh_rate_ex'] = 0.0                          # = 4500.0 Rate of external inhibitory input to excitatory neurons (spikes/s)
 
-# TODO: external poisson generator for inhibitory neurons
-p['exh_rate_ix'] = 0.0 #2250.0
+# TODO: External poisson generator for inhibitory neurons
+# Parameters of poisson generator to excitatory neurons
+p['exh_rate_ix'] = 0.0                          # = 2250.0 Rate of external excitatory input to inhibitory neurons
 
 ###################################################### connection and synapse dictionaries ######################################################
 
-#general connection dictionary
-general_RNN_conn_dict = {'rule': 'pairwise_bernoulli',              # connection rule
-                        'p': p['connection_p'],
-                        'allow_autapses': False,
-                        'allow_multapses': False
+# General connection dictionary
+general_RNN_conn_dict = {'rule': 'pairwise_bernoulli',              # Connection rule
+                        'p': p['connection_p'],                     # Connection probability of neurons in RNN
+                        'allow_autapses': False,                    # If False then no self-connections are allowed
+                        'allow_multapses': False                    # If False then only one connection between the neurons is allowed - TODO: check if this also disallows cycle between two nodes
                         }
 
-# parameters of excitatory EX synapses (external to E neurons)
-p['syn_dict_ex_exc'] = {'synapse_model': 'static_synapse',          # synapse model
-                        'weight': 1.6,                              # synaptic weight
+# Parameters of excitatory EX synapses (external to E neurons)
+p['syn_dict_ex_exc'] = {'synapse_model': 'static_synapse',          # Name of synapse model
+                        'weight': 1.6,                              # Synaptic weight (pF) - TODO: check if Farad is correct
                         }
-p['conn_dict_ex_exc'] = {'rule': 'all_to_all'}                      # connection rule
+p['conn_dict_ex_exc'] = {'rule': 'all_to_all'}                      # Connection rule
 
-# parameters of inhibitory EX synapses (external to E neurons)
-p['syn_dict_ex_inh'] = {'synapse_model': 'static_synapse',          # synapse model
-                        'weight': -2.4                              # synaptic weight
+# Parameters of inhibitory EX synapses (external to E neurons)
+p['syn_dict_ex_inh'] = {'synapse_model': 'static_synapse',          # Name of synapse model
+                        'weight': -2.4                              # Synaptic weight (pF)
                         }
-p['conn_dict_ex_inh'] = {'rule': 'all_to_all'}                      #connection rule
+p['conn_dict_ex_inh'] = {'rule': 'all_to_all'}                      # Connection rule
 
-# parameters of IX synapses (external to I neurons)
-p['syn_dict_ix'] = {'synapse_model': 'static_synapse',              # synapse model
-                        'weight': 1.52                              # synaptic weight
+# Parameters of IX synapses (external to I neurons)
+p['syn_dict_ix'] = {'synapse_model': 'static_synapse',              # Name of synapse model
+                        'weight': 1.52                              # Synaptic weight (pF)
                         }
-p['conn_dict_ix'] = {'rule': 'all_to_all'}                          #connection rule
+p['conn_dict_ix'] = {'rule': 'all_to_all'}                          # Connection rule
 
-# parameters of EE synapses (voltage-based STDP)
-p['syn_dict_ee'] = {'weight': 2.83,                                 # synaptic weight
-                    'synapse_model': 'clopath_synapse',             # synapse model
-                    'Wmax': 32.68,                                  # maximum E to E weight
-                    'Wmin': 1.45,                                   # minimum E to E weight
-                    'delay': 1000
+# Parameters of EE synapses (voltage-based STDP)
+p['syn_dict_ee'] = {'synapse_model': 'clopath_synapse',             # Name of synapse model - TODO: In the MATLAB code the weights might be randomized
+                    'weight': 2.83,                                 # Initial synaptic weight (pF)
+                    'Wmax': 32.68,                                  # Maximum allowed weight (pF)
+                    'Wmin': 1.45,                                   # Minimum allowed weight (pF)
+                    'delay': 1000                                   # Synaptic delay (ms)
                     }
-p['conn_dict_ee'] = general_RNN_conn_dict
+p['conn_dict_ee'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 # parameters for II synapses
-p['syn_dict_ii'] = {'synapse_model': 'static_synapse',              # synapse model
-                    'weight': 20.91                                 # synaptic weight
+p['syn_dict_ii'] = {'synapse_model': 'static_synapse',              # Name of synapse model
+                    'weight': 20.91                                 # Synaptic weight (pF)
                     }
-p['conn_dict_ii'] = general_RNN_conn_dict
+p['conn_dict_ii'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 # parameters for IE synapses 
-p['syn_dict_ie'] = {'synapse_model': 'static_synapse',              # synapse model
-                    'weight': 1.96                                  # synpatic weight
+p['syn_dict_ie'] = {'synapse_model': 'static_synapse',              # Name of synapse model
+                    'weight': 1.96                                  # Synpatic weight (pF)
                    }
-p['conn_dict_ie'] = general_RNN_conn_dict
+p['conn_dict_ie'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 #TODO: check if synapse model is correct + need to add Wmin but for synpase implementation there is no Wmin key in dict
 # parameters for EI synapses 
-p['syn_dict_ei'] = {'synapse_model': 'vogels_sprekeler_synapse',    # synapse model
-                    'weight': 62.87,                                # initial synpatic weight
-                    'Wmax': 243.0,
-#                    'Wmin': 48.7
+p['syn_dict_ei'] = {'synapse_model': 'vogels_sprekeler_synapse',    # Name of synapse model
+                    'weight': 62.87,                                # Initial synpatic weight (pF)
+                    'Wmax': 243.0,                                  # Maximum allowed weight (pF)
+#                    'Wmin': 48.7                                   # Minimum allowed weight (pF)
                    }
-p['conn_dict_ei'] = general_RNN_conn_dict
+p['conn_dict_ei'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 ###################################################### simulation parameters ######################################################
 
 # simulation parameters 
-p['dt'] = 0.1                                                           # simulation time resolution (ms)
+p['dt'] = 0.1                                                           # Simulation time resolution (ms)
 p['overwrite_files'] = True                                             # True: data will be overwritten; False: a NESTError is raised if the files already exist
-p['seed'] = para.ParameterRange([1])                                    # seed for NEST
-p['print_simulation_progress'] = False                                  # print the time progress.
-p['n_threads'] = 2                                                      # number of threads per MPI process 
+p['seed'] = para.ParameterRange([1])                                    # Seed for NEST
+p['print_simulation_progress'] = False                                  # Print the time progress
+p['n_threads'] = 2                                                      # Number of threads per MPI process 
 p['pad_time'] = 5.                                                      # TODO: What is this?
 p['idend_recording_interval'] = 10 * p['dt']                            # dendritic current recording resolution TODO: Do we need this?
 p['idend_record_time'] = 8.                                             # time interval after the external stimulation at which the dendritic current is recorded TODO: Do we need this?
