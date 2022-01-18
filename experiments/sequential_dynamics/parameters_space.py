@@ -138,27 +138,30 @@ p['conn_dict_ei'] = general_RNN_conn_dict                           # Connection
 ###################################################### simulation parameters ######################################################
 
 # simulation parameters 
-p['dt'] = 0.1                                                           # Simulation time resolution (ms)
-p['overwrite_files'] = True                                             # True: data will be overwritten; False: a NESTError is raised if the files already exist
-p['seed'] = para.ParameterRange([1])                                    # Seed for NEST
-p['print_simulation_progress'] = False                                  # Print the time progress
-p['n_threads'] = 2                                                      # Number of threads per MPI process 
-p['pad_time'] = 5.                                                      # TODO: What is this?
-p['idend_recording_interval'] = 10 * p['dt']                            # dendritic current recording resolution TODO: Do we need this?
-p['idend_record_time'] = 8.                                             # time interval after the external stimulation at which the dendritic current is recorded TODO: Do we need this?
-p['evaluate_performance'] = True                                        # if True, we monitor the dendritic current at a certain time steps during the simulation. This then is used for the prediction performance assessment
-p['evaluate_replay'] = False                                            # TODO: What is this?  
-p['record_idend_last_episode'] = True                                   # used for debugging, if turned on we record the dendritic current of all neurons this can consume too much memory TODO: Does this take too much time?
-p['store_connections'] = True                                           # stores connection in a seperate file
-p['load_connections'] = False                                           # loads connection from existing file
-#p['sparse_first_char'] = False                                         # if turned on, the dAP of a subset of neurons in the subpopulation representing 
-                                                                        # first sequence elements is activated externally 
-p['active_weight_recorder'] = False                                     # if True, the weights are recorded every presynaptic spike
-p['cluster_stimulation_time'] = 10.0                            # stimulation time from external input to excitatory cluster
-p['stimulation_gap'] = 5.0                                              # gap between to stimulations of excitatory clusters
-#p['sim_time'] = p['num_exc_clusters'] * p['cluster_stimulation_time'] + (p['num_exc_clusters'] - 1) * p['stimulation_gap']    #simulation time for one round TODO: better formatation
-p['sim_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])
+p['dt'] = 0.1                                                                                   # Simulation time resolution (ms)
+p['overwrite_files'] = True                                                                     # True: data will be overwritten; False: a NESTError is raised if the files already exist
+p['seed'] = para.ParameterRange([1])                                                            # Seed for NEST
+p['print_simulation_progress'] = False                                                          # Print the time progress
+p['n_threads'] = 2                                                                              # Number of threads per MPI process 
+p['pad_time'] = 5.                                                                              # TODO: What is this?
+p['idend_recording_interval'] = 10 * p['dt']                                                    # Dendritic current recording resolution TODO: Do we need this?
+p['idend_record_time'] = 8.                                                                     # Time interval after the external stimulation at which the dendritic current is recorded TODO: Do we need this?
+p['evaluate_performance'] = True                                                                # True: we monitor the dendritic current at a certain time steps during the simulation. This then is used for the prediction performance assessment
+p['evaluate_replay'] = False                                                                    # TODO: What is this?  
+p['record_idend_last_episode'] = True                                                           # Used for debugging, if turned on we record the dendritic current of all neurons this can consume too much memory TODO: Does this take too much time?
+p['store_connections'] = True                                                                   # Stores connection in a seperate file
+p['load_connections'] = False                                                                   # Loads connection from existing file
+#p['sparse_first_char'] = False                                                                 # If turned on, the dAP of a subset of neurons in the subpopulation representing 
+                                                                                                # First sequence elements is activated externally 
+p['active_weight_recorder'] = False                                                             # True: the weights are recorded every presynaptic spike
+p['cluster_stimulation_time'] = 10.0                                                            # Stimulation time from external input to excitatory cluster
+p['stimulation_gap'] = 5.0                                                                      # Gap between to stimulations of excitatory clusters  
+p['sim_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])  #simulation time for one round
+#p['sim_time'] = p['num_exc_clusters'] * p['cluster_stimulation_time'] + (p['num_exc_clusters'] - 1) * p['stimulation_gap'] 
+
 ###################################################### data path dict ######################################################
+
+# Simulation results such as spike times and connection weights are stored in clock_net/data/sequence_learning_performance/sequence_learning_and_prediction
 p['data_path'] = {}
 p['data_path']['data_root_path'] = 'data'
 p['data_path']['project_name'] = 'sequence_learning_performance'
@@ -166,29 +169,28 @@ p['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
 
 ###################################################### task parameters ######################################################
 
-# task parameters
 p['task'] = {}
-p['task']['task_name'] = 'hard_coded'          # name of the task
-p['task']['task_type'] = 1                     # this chooses between three hard coded sequence sets (see ./utils.py)
-p['task']['vocab_size'] = 6                   # vocabulary size
-p['task']['seed'] = 111                        # seed number
-p['task']['store_training_data'] = True        # if turned on, the sequence set is stored in directory defined in dict data_path
+p['task']['task_name'] = 'hard_coded'          # Name of the task
+p['task']['task_type'] = 1                     # This chooses between three hard coded sequence sets (see ./utils.py)
+p['task']['vocab_size'] = 6                    # Vocabulary size
+p['task']['seed'] = 111                        # Seed number
+p['task']['store_training_data'] = True        # If turned on, the sequence set is stored in directory defined in dict data_path
 if p['task']['task_name'] != 'hard_coded':
-    p['task']['num_sequences'] = 2             # number of sequences per sequence set
-    p['task']['num_sub_seq'] = 2               # if task_name == 'high_order', 
-                                               # it sets the number of sequences with same shared subsequence
-    p['task']['length_sequence'] = 6           # number of elements per sequence
-    p['task']['replace'] = False               # random choice of characters with replacement
+    p['task']['num_sequences'] = 2             # Number of sequences per sequence set
+    p['task']['num_sub_seq'] = 2               # If task_name == 'high_order', 
+                                               # It sets the number of sequences with same shared subsequence
+    p['task']['length_sequence'] = 6           # Number of elements per sequence
+    p['task']['replace'] = False               # Random choice of characters with replacement
 
 ###################################################### REST ######################################################
 
 # # setup the training loop  
-# p['learning_episodes'] = 85                     # total number of training episodes ('repetitions of the sequence sets')
-# p['episodes_to_testing'] = 1                   # number of episodes after which we measure the prediction perfomance
+# p['learning_episodes'] = 85                     # Total number of training episodes ('repetitions of the sequence sets')
+# p['episodes_to_testing'] = 1                    # Number of episodes after which we measure the prediction perfomance
 
 #TODO: Do I need this?
-# stimulus parameters
-p['DeltaT'] = 40.                     # inter-stimulus interval
-p['excitation_start'] = 30.           # time at which the external stimulation begins
-p['time_dend_to_somatic'] = 20.       # time between the dAP activation and the somatic activation (only used if sparse_first_char is True)   
-p['DeltaT_cue'] = 80.                 # inter-cue interval during replay
+# Stimulus parameters
+p['DeltaT'] = 40.                     # Inter-stimulus interval
+p['excitation_start'] = 30.           # Time at which the external stimulation begins
+p['time_dend_to_somatic'] = 20.       # Time between the dAP activation and the somatic activation (only used if sparse_first_char is True)   
+p['DeltaT_cue'] = 80.                 # Inter-cue interval during replay
