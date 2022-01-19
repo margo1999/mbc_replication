@@ -25,7 +25,7 @@ from clock_net import helper
 class Model:
     """Instantiation of the Clock Network model and its PyNEST implementation.
 
-    the model provides the following member functions: 
+    The model provides the following member functions: 
 
     __init__(parameters)
     create()
@@ -38,23 +38,27 @@ class Model:
     def __init__(self, params, sequences, vocabulary):
         """Initialize model and simulation instance, including
 
-        1) parameter setting,
-        2) generate sequence data,
-        3) configuration of the NEST kernel,
-        4) setting random-number generator seed, and
+        1) Parameter setting,
+        2) Generate sequence data,
+        3) Configuration of the NEST kernel,
+        4) Setting random-number generator seed, and
 
         Parameters
         ----------
-        params:    dict
-                   Parameter dictionary
+        params:     dict
+                    Parameter dictionary
+        seuqences:  list
+                    Sequences to learn
+        vocabulary: list
+                    Vocabulary from which the sequences are constructed
         """
 
         print('\nInitialising model and simulation...')
 
-        # set parameters derived from base parameters
+        # Set parameters derived from base parameters
         self.params = helper.derived_parameters(params)
 
-        # data directory
+        # Data directory
         if self.params['evaluate_replay']:
             self.data_path = helper.get_data_path(self.params['data_path'], self.params['label'], 'replay')
         else:
@@ -72,27 +76,26 @@ class Model:
                 message = "Directory has been created."
             print("Data will be written to: {}\n{}\n".format(self.data_path, message))
 
-        # set network size parameters
+        # Set network size parameters
         self.num_exc_neurons = params['num_exc_neurons']
         self.num_inh_neurons = params['num_inh_neurons']
         self.num_exc_clusters = params['num_exc_clusters']
 
-        # initialize RNG        
+        # Initialize RNG        
         np.random.seed(self.params['seed'])
         random.seed(self.params['seed'])
 
-        # input stream: sequence data
+        # Input stream: sequence data
         self.sequences = sequences
         self.vocabulary = vocabulary
-        self.length_sequence = len(self.sequences[0]) # TODO: possible that sequences do not have the same length
+        self.length_sequence = len(self.sequences[0]) # TODO: possible that sequences do not have the same length? 
         self.num_sequences = len(self.sequences)
+
+        if params['task']['task_name'] != 'hard_coded':
+            assert self.length_sequences == params['task']['length_sequence']
 
         # initialize the NEST kernel
         self.__setup_nest()
-
-        # get time constant for dendriticAP rate
-        #self.params['exhibit_params']['tau_h'] = self.__get_time_constant_dendritic_rate(
-        #    calibration=self.params['calibration'])
 
     def __setup_nest(self):
         """Initializes the NEST kernel.
@@ -116,16 +119,16 @@ class Model:
 
         print('\nCreating and configuring nodes...')
 
-        # create excitatory and inhibitory population of RNN
+        # Create excitatory and inhibitory population of RNN
         self.__create_RNN_populations()
 
-        # create recording devices
+        # Create recording devices
         self.__create_recording_devices()
 
-        # create spike generators
+        # Create spike generators
         self.__create_spike_generators()
 
-        #TODO: Can this be deleted?
+        # TODO: Can this be deleted?
         # compute timing of the external inputs and recording devices
         # TODO: this function should probably not be part of the model
         # excitation_times, excitation_times_dict = self.__compute_timing_external_inputs(self.params['DeltaT'], 
@@ -140,90 +143,73 @@ class Model:
 
         print('\nConnecting network and devices...')
 
-        # connect excitatory population (EE)
+        # Connect excitatory population (EE) TODO: also EI connections are plastic
         if self.params['load_connections']:
             self.__load_connections(label='ee_connections')
         else:
             self.__connect_excitatory_neurons()
 
-        # connect inhibitory population (II, EI, IE)
+        # Connect inhibitory population (II, EI, IE)
         self.__connect_RNN_neurons()
 
-        # connect external input
+        # Connect external input
         self.__connect_external_inputs_to_clusters()
 
-        # connect neurons to the spike recorder
+        # Connect neurons to the spike recorder
         self.__connect_neurons_to_spike_recorders()
         
-        print('All nodes connected!')
+        print('\nAll nodes connected...')
 
     def simulate(self):
-        """Run simulation.
+        """Run simulation by stopping after each round to reset the times of the spike generators.
         """
 
         sim_time = self.params['sim_time']
 
-        # the simulation time is set during the creation of the network  
+        # Rank() returns the MPI rank of the local process
         if nest.Rank() == 0:
             print('\nSimulating {} ms.'.format(sim_time))
 
-        #TODO: set actual loop, current is only for testing
-        #nest.Prepare()
-        for i in tqdm(range(1)):
+        # TODO: Set actual loop where sequential simulation lasts one hour, current it is only for testing
+        for i in tqdm(range(self.params['sim_rounds'])):
             assert (i*sim_time) == nest.biological_time
 
             nest.Simulate(sim_time)
-            #nest.Run(sim_time)
 
-            # for generator_exc in self.external_node_to_exc_neuron_dict.values():
-            #     generator_exc.stop += sim_time
-            #     generator_exc.start += sim_time
-            #     print(generator_exc.origin)
-
-            # for generator_inh in self.external_node_to_inh_neuron_list:
-            #     generator_inh.stop += sim_time
-            #     generator_inh.start += sim_time
-
+            # Simulation is stopped to set a new reference time (origin) for start and stop of the generators, otherwise they would only spike at the beginning
             for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
                 generators_to_exc[0].origin += sim_time
                 generators_to_exc[1].origin += sim_time
-
             for generator_to_inh in self.external_node_to_inh_neuron_list:
                 generator_to_inh.origin += sim_time
-                
-        #nest.Cleanup()
-
-        #voltage_trace.from_device(self.voltmeter)
-        #plt.show()
         
 
     def __create_RNN_populations(self):
-        """'Create neuronal populations
+        """Create RNN neuronal populations consisting of excitatory and inhibitory neurons.
         """
 
-        # create excitatory population
+        # Create excitatory population
         self.exc_neurons = nest.Create(self.params['exhibit_model'],
                                        self.num_exc_neurons,
                                        params=self.params['exhibit_params'])
-        print(f"Create {self.num_exc_neurons=} excitatory neurons")
-        print(nest.network_size)
+        print(f"Create {self.num_exc_neurons=} excitatory neurons...")
 
-        # create inhibitory population
+        # Create inhibitory population
         self.inh_neurons = nest.Create(self.params['inhibit_model'],
                                        self.num_inh_neurons,
                                        params=self.params['inhibit_params'])
-        print(f"Create {self.num_inh_neurons=} inhibitory neurons")
-        print(nest.network_size)
+        print(f"Create {self.num_inh_neurons=} inhibitory neurons...")
 
     def __create_spike_generators(self):
-        """Create spike generators
+        """Create spike generators. In total, there are three types of poisson generators. The first excites neuron clusters sequentially, 
+        while the second inhibits all other RNN clusters. The last generator stimulates the inhibitory neurons of the RNN.
         """
         self.external_node_to_exc_neuron_dict = {}
         self.external_node_to_inh_neuron_list = []
+
         cluster_stimulation_time = self.params['cluster_stimulation_time']
         stimulation_gap = self.params['stimulation_gap']
 
-        #TODO: At the moment there is one Poisson generator for all exc_clusters per stimulation -> Constraint: rate is for all 4.5 -> paper shows contrdiction
         for stimulation_step in range(self.num_exc_clusters):
             external_input_per_step_list = []
             start = stimulation_step * (cluster_stimulation_time + stimulation_gap)
@@ -239,40 +225,35 @@ class Model:
         """
 
         #TODO: Should the params dictionary also be in parameters_space?
-        # create a spike recorder for exc neurons
-        self.spike_recorder_soma = nest.Create('spike_recorder', params={'record_to': 'ascii',
+        # Create spike recorder for exc neurons
+        self.spike_recorder_exc = nest.Create('spike_recorder', params={'record_to': 'ascii',
                                                                          'label': 'exh_spikes'})
-        print('Create 1 spike recorder for soma')
-        print(nest.network_size)
 
-        # create a spike recorder for inh neurons
+        # Create spike recorder for inh neurons
         self.spike_recorder_inh = nest.Create('spike_recorder', params={'record_to': 'ascii',
                                                                'label': 'inh_spikes'})
-        print('Create 1 spike recorder for inh')
-        print(nest.network_size)
 
+        # Create spike recorder for spike generator
         self.spike_recorder_generator = nest.Create('spike_recorder', params={'record_to': 'ascii',
                                                                'label': 'generator_spikes'})
 
-        self.voltmeter = nest.Create('voltmeter')
-
+    # TODO: change function to __create_plasticity_connections() and connect E to E and I to E 
     def __connect_excitatory_neurons(self):
         """Connect excitatory neurons
         """
-
-        nest.Connect(self.exc_neurons, self.exc_neurons, conn_spec=self.params['conn_dict_ee'],
-                     syn_spec=self.params['syn_dict_ee'])
+        # EE connections
+        nest.Connect(self.exc_neurons, self.exc_neurons, conn_spec=self.params['conn_dict_ee'], syn_spec=self.params['syn_dict_ee'])
 
     def __connect_RNN_neurons(self):
         """Create II, EI, IE connections
         """
-        # II connection
+        # II connections
         nest.Connect(self.inh_neurons, self.inh_neurons, conn_spec=self.params['conn_dict_ii'], syn_spec=self.params['syn_dict_ii'])
 
-        # EI connection
+        # EI connections
         nest.Connect(self.inh_neurons, self.exc_neurons, conn_spec=self.params['conn_dict_ei'], syn_spec=self.params['syn_dict_ei'])
 
-        # IE connection
+        # IE connections
         nest.Connect(self.exc_neurons, self.inh_neurons, conn_spec=self.params['conn_dict_ie'], syn_spec=self.params['syn_dict_ie'])
 
     def __connect_external_inputs_to_clusters(self):
@@ -281,7 +262,7 @@ class Model:
 
         exc_cluster_size = self.params['exc_cluster_size']
 
-        # connect to excitatory neurons
+        # Connect generators to excitatory neurons
         for cluster_index, external_nodes in self.external_node_to_exc_neuron_dict.items():
             first_neuron = cluster_index * exc_cluster_size
             last_neuron = (first_neuron + exc_cluster_size) - 1
@@ -293,21 +274,24 @@ class Model:
             if (last_neuron+1) < len(self.exc_neurons):
                 nest.Connect(external_node_inh, self.exc_neurons[(last_neuron+1):], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])     
         
-        # connect to inhibitory neurons
+        # Connect generators to inhibitory neurons
         for external_node in self.external_node_to_inh_neuron_list:
             nest.Connect(external_node, self.inh_neurons, conn_spec=self.params['conn_dict_ix'], syn_spec=self.params['syn_dict_ix'])
 
     def __connect_neurons_to_spike_recorders(self):
-        """Connect excitatory neurons to spike recorders
+        """Connect excitatory, inhibitory neurons and also all generators to spike recorders
         """
-        nest.Connect(self.exc_neurons, self.spike_recorder_soma)
+        # Connect excitatory neurons to spike recorder
+        nest.Connect(self.exc_neurons, self.spike_recorder_exc)
+
+        # Connect inhibitory neurons to spike recorder
         nest.Connect(self.inh_neurons, self.spike_recorder_inh)
-        #import pdb; pdb.set_trace()
+    
+        # Connect all generators to spike recorders
         for i in range(self.num_exc_clusters):
             nest.Connect(self.external_node_to_exc_neuron_dict[i][0], self.spike_recorder_generator)
             nest.Connect(self.external_node_to_exc_neuron_dict[i][1], self.spike_recorder_generator)
             nest.Connect(self.external_node_to_inh_neuron_list[i], self.spike_recorder_generator)
-        nest.Connect(self.voltmeter, self.exc_neurons)
 
     def save_connections(self, synapse_model=None, fname='ee_connections'):
         """Save connection matrix
@@ -326,7 +310,7 @@ class Model:
         #connections_all = nest.GetConnections(synapse_model=self.params['syn_dict_ee']['synapse_model'])
         connections_all = nest.GetConnections(synapse_model=synapse_model)
 
-    #TODO replace stdsp_synapse by clopath_synapse
+    #TODO what is 'permanence' and do we need this for 'clopath_synapse' also? Modify if-statement
         if synapse_model== 'stdsp_synapse':
             connections = nest.GetStatus(connections_all, ['target', 'source', 'weight', 'permanence'])
         else:
