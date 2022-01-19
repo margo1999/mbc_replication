@@ -6,6 +6,7 @@ Authors
 Jette Oberlaender, Younes Bouhadjar
 """
 
+from logging import raiseExceptions
 import os
 import sys
 import copy
@@ -49,10 +50,10 @@ def psp_max_2_psc_max(psp_max, tau_m, tau_s, R_m):
 ##########################################
 def generate_sequences(params, data_path, fname):
     """Generate sequence of elements using three methods:
-    1. randomly drawn elements from a vocabulary
-    2. sequences with transition matrix
-    3. higher order sequences: sequences with shared subsequences
-    4. hard coded sequences
+    1. Higher order sequences: sequences with shared subsequences 'high_oder'
+    2. Randomly drawn elements from a vocabulary 'random'
+    3. Sequences with transition matrix 'structure'
+    4. Hard coded sequences 'hard_coded'
 
     Parameters
     ----------
@@ -104,11 +105,9 @@ def generate_sequences(params, data_path, fname):
                 sequence = start_char + sub_seq + end_char
                 sequences.append(sequence)
 
-                # randomly shuffled characters
     elif task_name == "random":
-        sequences = [random.sample(vocabulary, length_seq) for _ in range(params['num_sequences'])]
+        sequences = [random.sample(vocabulary, params['length_sequence']) for _ in range(params['num_sequences'])]
 
-    # create sequences using matrix transition 
     elif task_name == "structure":
         matrix_transition = defaultdict(list)
         for char in vocabulary:
@@ -118,12 +117,13 @@ def generate_sequences(params, data_path, fname):
         for _ in range(params['num_sequences']):
             sequence = random.sample(vocabulary, 1)
             last_char = sequence[-1]
-            for _ in range(length_seq - 1):
+            for _ in range(params['length_sequence'] - 1):
                 sequence += np.random.choice(vocabulary, 1, p=matrix_transition[last_char])[0]
                 last_char = sequence[-1]
 
             sequences += [sequence]
-    else:
+
+    elif task_name == "hard_coded":
 
         # hard coded sequences 
         if task_type == 1:
@@ -136,8 +136,10 @@ def generate_sequences(params, data_path, fname):
                          ['F', 'J', 'M', 'E', 'I'], ['B', 'C', 'K', 'B', 'I'], ['A', 'C', 'K', 'B', 'F']]
         else:
             sequences = [['A', 'D', 'B', 'G', 'H', 'E'], ['F', 'D', 'B', 'G', 'H', 'C']]
+    else:
+        raise Exception(f"{task_name=} does not exist! Choose between: 'high_oder', 'random', 'structure', 'hard_coded'")
 
-    # test sequences used to measure the accuracy 
+    # Test sequences used to measure the accuracy TODO: What is this used for?
     test_sequences = sequences
 
     if params['store_training_data']:
