@@ -28,7 +28,7 @@ if simulation_script == "training.py":
 
     import parameters_space as data_pars 
  
-    # get parameters 
+    # Get parameters 
     PS = data_pars.p
 else:
     path_dict = {}
@@ -36,25 +36,25 @@ else:
     path_dict['project_name'] = "sequence_learning_performance"
     path_dict['parameterspace_label'] = "stimulus_timing_analysis"
 
-    # get parameters 
+    # Get parameters 
     PS, data_path = helper.get_parameter_set(path_dict)
  
-# parameters list 
+# Parameters list 
 PL = helper.parameter_set_list(PS)
 
-# save parameters.py  
+# Save parameters.py  
 if simulation_script == "training.py":
     helper.copy_scripts(PS['data_path'], "parameters_space.py")
 
-# simulation 
+# Simulation 
 N = len(PL)
 print(f"{N=}" + '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
-#Parallel(n_jobs=2)(delayed(sim)(i) for i in range(N))
+# Parallel(n_jobs=2)(delayed(sim)(i) for i in range(N))
 
-#TODO: remove test
-#just for testing
+# TODO: Remove test
+# Just for testing
 N = 1
 for i in range(N):
      sim(i)
