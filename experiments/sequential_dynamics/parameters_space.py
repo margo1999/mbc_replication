@@ -13,14 +13,14 @@ if(not TEST_NETWORK):
     p['num_exc_clusters'] = 80                                              # Number of exciatatory clusters
     p['exc_cluster_size'] = p['num_exc_neurons'] // p['num_exc_clusters']   # Number of excitatory neurons in one cluster
     p['connection_p'] = 0.2                                                 # Recurrent network connection probability
-    print('The orginal size of the network is used!') 
+    print('\nThe orginal size of the network is used!') 
 else:    
     p['num_exc_neurons'] = 240                                              # Number of recurrent E neurons
     p['num_inh_neurons'] = 60                                               # Number of recurrent I neurons
     p['num_exc_clusters'] = 8                                               # Number of exciatatory clusters
     p['exc_cluster_size'] = p['num_exc_neurons'] // p['num_exc_clusters']   # Number of excitatory neurons in one cluster
     p['connection_p'] = 0.2                                                 # Recurrent network connection probability
-    print('A smaller size of the network is used!')                                                 
+    print('\nA smaller size of the network is used!')                                                 
 
 ###################################################### all node models ######################################################
 
@@ -40,16 +40,16 @@ p['exhibit_params'] = {'A_LTD': 0.0014,         # LTD amplitude (pa/mV)
                     'Delta_T': 2.0,             # Exponential slope (mV)
                     'tau_w': 100.0,             # Adaption current time constant (ms)
                     'I_sp': 0.0,                # Depolarizing spike afterpotential current magnitude (pA)
-                    'z': 0.0,                   # Spike-adaptation current (pA)
+                    #'z': 0.0,                   # Spike-adaptation current (pA)
                     'I_e': 0.0,                 # Constant external input current (pA)
                     'E_L': -70.0,               # Leak reversal potential aka resting potential (mV)
                     'g_L': 300.0 / 20.0,        # Leak conductance (mV) - g_L = C_m / tau_E, where tau_E is membrane potential time constant
-                    'tau_syn_ex': 1.0,          # Rise time of the excitatory synaptic alpha function aka rise time constant (ms)
-                    'tau_syn_in': 6.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant(ms)
-                    # 'V_m':                    # Membrane potential (mV) - TODO: Should V_m also be set?
+                    #'tau_syn_ex': 1.0,          # Rise time of the excitatory synaptic alpha function aka rise time constant (ms)
+                    #'tau_syn_in': 6.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant(ms)
+                    # 'V_m':                     # Membrane potential (mV) - TODO: Should V_m also be set?
                     }
-assert(p['exhibit_params']['V_th_max'] == (p['exhibit_params']['V_th_rest']+ 10.0))
-assert(p['exhibit_params']['g_L'] == (p['exhibit_params']['C_m'] / 20.0))
+assert p['exhibit_params']['V_th_max'] == (p['exhibit_params']['V_th_rest']+ 10.0)
+assert p['exhibit_params']['g_L'] == (p['exhibit_params']['C_m'] / 20.0)
 
 #TODO: Replace model by actual model -> iaf_cond_alpha + different kernel
 # Parameters of inhibitory neurons
@@ -67,16 +67,16 @@ p['inhibit_params'] = {'C_m': 300.0,            # Capacitance of the membrane (p
                     'tau_syn_in': 2.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant (ms)
                     # 'V_m':                    # Membrane potential (mV) - TODO: Should V_m also be set?
                     }
-assert(p['inhibit_params']['g_L'] == (p['inhibit_params']['C_m'] / 20.0))
+assert p['inhibit_params']['g_L'] == (p['inhibit_params']['C_m'] / 20.0)
 
 # TODO: External poisson generator for excitatory neurons
 # Parameters of poisson generator to excitatory neurons
-p['exh_rate_ex'] = 0.0                          # = 18000.0 Rate of external excitatory input to excitatory neurons (spikes/s)
-p['inh_rate_ex'] = 0.0                          # = 4500.0 Rate of external inhibitory input to excitatory neurons (spikes/s)
+p['exh_rate_ex'] = 18000.0                      # Rate of external excitatory input to excitatory neurons (spikes/s)
+p['inh_rate_ex'] = 4500.0                       # Rate of external inhibitory input to excitatory neurons (spikes/s)
 
 # TODO: External poisson generator for inhibitory neurons
 # Parameters of poisson generator to excitatory neurons
-p['exh_rate_ix'] = 0.0                          # = 2250.0 Rate of external excitatory input to inhibitory neurons
+p['exh_rate_ix'] = 0.0                       # Rate of external excitatory input to inhibitory neurons
 
 ###################################################### connection and synapse dictionaries ######################################################
 
@@ -106,7 +106,7 @@ p['syn_dict_ix'] = {'synapse_model': 'static_synapse',              # Name of sy
 p['conn_dict_ix'] = {'rule': 'all_to_all'}                          # Connection rule
 
 # Parameters of EE synapses (voltage-based STDP)
-p['syn_dict_ee'] = {'synapse_model': 'clopath_synapse',             # Name of synapse model - TODO: In the MATLAB code the weights might be randomized
+p['syn_dict_ee'] = {'synapse_model': 'clopath_synapse',             # Name of synapse model - TODO: In MATLAB code the weights might be randomized
                     'weight': 2.83,                                 # Initial synaptic weight (pF)
                     'Wmax': 32.68,                                  # Maximum allowed weight (pF)
                     'Wmin': 1.45,                                   # Minimum allowed weight (pF)
@@ -116,7 +116,7 @@ p['conn_dict_ee'] = general_RNN_conn_dict                           # Connection
 
 # parameters for II synapses
 p['syn_dict_ii'] = {'synapse_model': 'static_synapse',              # Name of synapse model
-                    'weight': 20.91                                 # Synaptic weight (pF)
+                    'weight': 20.91                                 # Synaptic weight (pF) - TODO: Weight should be negative?!
                     }
 p['conn_dict_ii'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
@@ -156,8 +156,9 @@ p['load_connections'] = False                                                   
 p['active_weight_recorder'] = False                                                             # True: the weights are recorded every presynaptic spike
 p['cluster_stimulation_time'] = 10.0                                                            # Stimulation time from external input to excitatory cluster
 p['stimulation_gap'] = 5.0                                                                      # Gap between to stimulations of excitatory clusters  
-p['sim_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])  #simulation time for one round
-#p['sim_time'] = p['num_exc_clusters'] * p['cluster_stimulation_time'] + (p['num_exc_clusters'] - 1) * p['stimulation_gap'] 
+p['sim_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])  # Simulation time for one round
+#p['sim_time'] = p['num_exc_clusters'] * p['cluster_stimulation_time'] + (p['num_exc_clusters'] - 1) * p['stimulation_gap']
+p['sim_rounds'] = 1                                                                             # = 3 600 000 ms / (30 * 15 ms) = 1 h / (30 * 15 ms) - Number of rounds needed to run the simulation for an hour 
 
 ###################################################### data path dict ######################################################
 
@@ -170,7 +171,7 @@ p['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
 ###################################################### task parameters ######################################################
 
 p['task'] = {}
-p['task']['task_name'] = 'hard_coded'          # Name of the task
+p['task']['task_name'] = 'hard_coded'          # Name of the task ['high_order', 'random', 'structure', 'hard_coded']
 p['task']['task_type'] = 1                     # This chooses between three hard coded sequence sets (see ./utils.py)
 p['task']['vocab_size'] = 6                    # Vocabulary size
 p['task']['seed'] = 111                        # Seed number
