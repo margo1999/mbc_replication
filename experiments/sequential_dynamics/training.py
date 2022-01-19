@@ -102,5 +102,13 @@ def generate_reference_data():
             time_store_connection_after -
             time_simulate))
 
+if __name__ == '__main__':    
+    from figures import plot_results
+    import matplotlib.pyplot as plt
 
-generate_reference_data()
+    generate_reference_data()
+    plot_results.plot_results()
+    plt.show()
+
+    
+    
