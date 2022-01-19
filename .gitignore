@@ -1,3 +1,4 @@
 *.pyc
 *.dat
 *.npy
+data/sequence_learning_performance/sequence_learning_and_prediction/parameters_space.py
