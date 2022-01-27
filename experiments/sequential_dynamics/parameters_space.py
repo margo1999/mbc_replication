@@ -26,7 +26,7 @@ else:
 
 #TODO: Replace model by actual model -> aeif_cond_alpha_clopath + different kernel
 # Parameters of excitatory neurons
-p['exhibit_model'] = 'aeif_psc_delta_clopath'
+p['exhibit_model'] = 'aeif_cond_alpha_clopath'
 p['exhibit_params'] = {'A_LTD': 0.0014,         # LTD amplitude (pa/mV)
                     'A_LTP': 0.0008,            # LTP amplitude (pa/mV^2)
                     'C_m': 300.0,               # Capacitance of the membrane (pF)
@@ -36,16 +36,21 @@ p['exhibit_params'] = {'A_LTD': 0.0014,         # LTD amplitude (pa/mV)
                     'V_th_rest': -52.0,         # Threshold V_th is relaxing back to V_th_rest (mV) 
                     't_ref': 5.0,               # Absolute refactory period (ms)
                     'a': 0.0,                   # Subthreshold adaption (nS) - keep zero so it matches equation (3) in Maes et al. (2020)
-                    'b':1000.0,                 # Adaption current increase constant (pA)
+                    'b': 1000.0,                # Adaption current increase constant (pA)
                     'Delta_T': 2.0,             # Exponential slope (mV)
                     'tau_w': 100.0,             # Adaption current time constant (ms)
-                    'I_sp': 0.0,                # Depolarizing spike afterpotential current magnitude (pA)
-                    #'z': 0.0,                   # Spike-adaptation current (pA)
                     'I_e': 0.0,                 # Constant external input current (pA)
                     'E_L': -70.0,               # Leak reversal potential aka resting potential (mV)
                     'g_L': 300.0 / 20.0,        # Leak conductance (mV) - g_L = C_m / tau_E, where tau_E is membrane potential time constant
-                    #'tau_syn_ex': 1.0,          # Rise time of the excitatory synaptic alpha function aka rise time constant (ms)
-                    #'tau_syn_in': 6.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant(ms)
+                    'tau_syn_ex': 1.0,          # Rise time of the excitatory synaptic alpha function aka rise time constant (ms)
+                    'tau_syn_in': 6.0,          # Rise time of the inhibitory synaptic alpha function aka decay time constant(ms)
+                    'E_ex': 0.0,                # Excitatory reversal potential (mV)
+                    'E_in': -75.0,              # Inhibitory reversal potential (mV)
+                    'tau_V_th': 30.0,           # Apaptive Threshold time constant (ms)
+                    'theta_minus': -70.0,       # LTD threshold (mV)
+                    'theta_plus': -49.0,        # LTP threshold (mV)
+                    #'tau_bar_minus': 10.0,      # Time constant of low pass filtered postsynaptic membrane potential (LTD) (ms) TODO
+                    #'tau_bar_plus': 7.0         # Time constant of low pass filtered postsynaptic membrane potential (LTP) (ms) TODO
                     # 'V_m':                     # Membrane potential (mV) - TODO: Should V_m also be set?
                     }
 assert p['exhibit_params']['V_th_max'] == (p['exhibit_params']['V_th_rest']+ 10.0)
@@ -76,7 +81,7 @@ p['inh_rate_ex'] = 4500.0                       # Rate of external inhibitory in
 
 # TODO: External poisson generator for inhibitory neurons
 # Parameters of poisson generator to excitatory neurons
-p['exh_rate_ix'] = 0.0                       # Rate of external excitatory input to inhibitory neurons
+p['exh_rate_ix'] = 2250.0                       # Rate of external excitatory input to inhibitory neurons
 
 ###################################################### connection and synapse dictionaries ######################################################
 
@@ -110,13 +115,14 @@ p['syn_dict_ee'] = {'synapse_model': 'clopath_synapse',             # Name of sy
                     'weight': 2.83,                                 # Initial synaptic weight (pF)
                     'Wmax': 32.68,                                  # Maximum allowed weight (pF)
                     'Wmin': 1.45,                                   # Minimum allowed weight (pF)
-                    'delay': 1000                                   # Synaptic delay (ms)
+                    'tau_x': 3.5,                                   # Time constant of low pass filtered presynaptic spike train in recurrent network (ms)
+                    #'delay': 1000                                   # Synaptic delay (ms)
                     }
 p['conn_dict_ee'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 # parameters for II synapses
 p['syn_dict_ii'] = {'synapse_model': 'static_synapse',              # Name of synapse model
-                    'weight': 20.91                                 # Synaptic weight (pF) - TODO: Weight should be negative?!
+                    'weight': - 20.91                                 # Synaptic weight (pF)
                     }
 p['conn_dict_ii'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
@@ -129,9 +135,11 @@ p['conn_dict_ie'] = general_RNN_conn_dict                           # Connection
 #TODO: check if synapse model is correct + need to add Wmin but for synpase implementation there is no Wmin key in dict
 # parameters for EI synapses 
 p['syn_dict_ei'] = {'synapse_model': 'vogels_sprekeler_synapse',    # Name of synapse model
-                    'weight': 62.87,                                # Initial synpatic weight (pF)
-                    'Wmax': 243.0,                                  # Maximum allowed weight (pF)
-#                    'Wmin': 48.7                                   # Minimum allowed weight (pF)
+                    'weight': - 62.87,                                # Initial synpatic weight (pF)
+                    'eta': 1.0,                                      # TODO: Should be the same as the learning rate, in Julia code it is 1.0 but in the paper it is 10^-5
+                    'alpha': 2.0 * 3.0 * 20.0,                       # TODO: set r_0 and tau_y above -> alpha = 2*r_0*tau_y AND ARE THE UNITS CORRECT?
+                    'Wmax': - 243.0,                                  # TODO: Wmax < weight ? Probably not correct... Maximum allowed weight (pF)
+                    'Wmin': -48.7                                   # TODO: minimum weight can not be set at the moment Minimum allowed weight (pF)
                    }
 p['conn_dict_ei'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
@@ -158,7 +166,8 @@ p['cluster_stimulation_time'] = 10.0                                            
 p['stimulation_gap'] = 5.0                                                                      # Gap between to stimulations of excitatory clusters  
 p['sim_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])  # Simulation time for one round
 #p['sim_time'] = p['num_exc_clusters'] * p['cluster_stimulation_time'] + (p['num_exc_clusters'] - 1) * p['stimulation_gap']
-p['sim_rounds'] = 1                                                                             # = 3 600 000 ms / (30 * 15 ms) = 1 h / (30 * 15 ms) - Number of rounds needed to run the simulation for an hour 
+p['sim_rounds'] = 10                                                  #5000                           # = 3 600 000 ms / (80 * 15 ms) = 1 h / (30 * 15 ms) - Number of rounds needed to run the simulation for an hour
+p['normalization_time'] = 20.0
 
 ###################################################### data path dict ######################################################
 
