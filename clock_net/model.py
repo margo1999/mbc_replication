@@ -191,8 +191,17 @@ class Model:
             for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
                 generators_to_exc[0].origin += sim_time
                 generators_to_exc[1].origin += sim_time
-            for generator_to_inh in self.external_node_to_inh_neuron_list:
-                generator_to_inh.origin += sim_time
+                generators_to_exc[2].origin += sim_time
+            
+            self.external_node_to_inh_neuron.origin += sim_time
+
+            # OLD ONE 
+            # # Simulation is stopped to set a new reference time (origin) for start and stop of the generators, otherwise they would only spike at the beginning
+            # for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
+            #     generators_to_exc[0].origin += sim_time
+            #     generators_to_exc[1].origin += sim_time
+            # for generator_to_inh in self.external_node_to_inh_neuron_list:
+            #     generator_to_inh.origin += sim_time
         
 
     def __create_RNN_populations(self):
@@ -214,7 +223,7 @@ class Model:
 
     def __create_spike_generators(self):
         """Create spike generators. In total, there are three types of poisson generators. The first excites neuron clusters sequentially, 
-        while the second inhibits all other RNN clusters. The last generator stimulates the inhibitory neurons of the RNN.
+        while the second inhibits all other RNN clusters constantly. The last generator stimulates the inhibitory neurons of the RNN.
         """
         self.external_node_to_exc_neuron_dict = {}
         self.external_node_to_inh_neuron_list = []
@@ -226,11 +235,10 @@ class Model:
             external_input_per_step_list = []
             start = stimulation_step * (cluster_stimulation_time + stimulation_gap)
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ex'])))
-            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['inh_rate_ex'])))
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start+cluster_stimulation_time, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
             self.external_node_to_exc_neuron_dict[stimulation_step] = external_input_per_step_list
-            self.external_node_to_inh_neuron_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ix'])))
-
-        # TODO: set spike generator status with the above computed excitation times (see Younes code above)
+        self.external_node_to_inh_neuron = nest.Create('poisson_generator', params=dict(start=0.0, stop=self.num_exc_clusters*(cluster_stimulation_time+stimulation_gap), rate=self.params['exh_rate_ix']))
         
     def __create_recording_devices(self):
         """Create recording devices
@@ -279,16 +287,17 @@ class Model:
             first_neuron = cluster_index * exc_cluster_size
             last_neuron = (first_neuron + exc_cluster_size) - 1
             external_node_exc = external_nodes[0]
-            external_node_inh = external_nodes[1]
+            external_node_inh_gap = external_nodes[1]
+            external_node_inh = external_nodes[2]
             nest.Connect(external_node_exc, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_exc'], syn_spec=self.params['syn_dict_ex_exc'])
+            nest.Connect(external_node_inh_gap, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])
             if first_neuron > 0:
                 nest.Connect(external_node_inh, self.exc_neurons[: first_neuron], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])
             if (last_neuron+1) < len(self.exc_neurons):
                 nest.Connect(external_node_inh, self.exc_neurons[(last_neuron+1):], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])     
         
-        # Connect generators to inhibitory neurons
-        for external_node in self.external_node_to_inh_neuron_list:
-            nest.Connect(external_node, self.inh_neurons, conn_spec=self.params['conn_dict_ix'], syn_spec=self.params['syn_dict_ix'])
+        # Connect generator to inhibitory neurons
+        nest.Connect(self.external_node_to_inh_neuron, self.inh_neurons, conn_spec=self.params['conn_dict_ix'], syn_spec=self.params['syn_dict_ix'])
 
     def __connect_neurons_to_spike_recorders(self):
         """Connect excitatory, inhibitory neurons and also all generators to spike recorders
@@ -303,7 +312,8 @@ class Model:
         for i in range(self.num_exc_clusters):
             nest.Connect(self.external_node_to_exc_neuron_dict[i][0], self.spike_recorder_generator)
             nest.Connect(self.external_node_to_exc_neuron_dict[i][1], self.spike_recorder_generator)
-            nest.Connect(self.external_node_to_inh_neuron_list[i], self.spike_recorder_generator)
+            nest.Connect(self.external_node_to_exc_neuron_dict[i][2], self.spike_recorder_generator)
+        nest.Connect(self.external_node_to_inh_neuron, self.spike_recorder_generator)
 
     def save_connections(self, synapse_model=None, fname='ee_connections'):
         """Save connection matrix
@@ -379,6 +389,8 @@ class Model:
 
             nest.Connect(conns_src, conns_tg, 'one_to_one', syn_dict)
         
+    # This function is different to the one in Julia but based on the text in the Maes et al. (2020) paper, we could assume that this is the function we need
+    # TODO: Test later if it makes any difference if we use this function or normalize_weights()
     def normalize_weights_L1(self, neurons_to_be_normalized, initial_weight_inputs):
        Wmin, Wmax = self.params['syn_dict_ee']['Wmin'], self.params['syn_dict_ee']['Wmax']
        for neuron in neurons_to_be_normalized:
@@ -415,8 +427,67 @@ class Model:
             # This test only gives correct result if the function is called before any weight changes TODO: remove later
             assert np.allclose(initial_weight_sums_dict[neuron.global_id], sum(abs(np.array(conn.weight))))
         return initial_weight_sums_dict
-            
 
+    # This function was implemented based on the text in Maes et al. (2020) but does not correspond to the code in Julia
+    def __create_spike_generators_old(self):
+        """Create spike generators. In total, there are three types of poisson generators. The first excites neuron clusters sequentially, 
+        while the second inhibits all other RNN clusters. The last generator stimulates the inhibitory neurons of the RNN.
+        """
+        self.external_node_to_exc_neuron_dict = {}
+        self.external_node_to_inh_neuron_list = []
+
+        cluster_stimulation_time = self.params['cluster_stimulation_time']
+        stimulation_gap = self.params['stimulation_gap']
+
+        for stimulation_step in range(self.num_exc_clusters):
+            external_input_per_step_list = []
+            start = stimulation_step * (cluster_stimulation_time + stimulation_gap)
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ex_old'])))
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['inh_rate_ex_old'])))
+            self.external_node_to_exc_neuron_dict[stimulation_step] = external_input_per_step_list
+            self.external_node_to_inh_neuron_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ix'])))
+
+        # TODO: set spike generator status with the above computed excitation times (see Younes code above)        
+
+    # This function was implemented based on the text in Maes et al. (2020) but does not correspond to the code in Julia
+    def __connect_external_inputs_to_clusters_old(self):
+        """Connect external inputs to subpopulations
+        """
+
+        exc_cluster_size = self.params['exc_cluster_size']
+
+        # Connect generators to excitatory neurons
+        for cluster_index, external_nodes in self.external_node_to_exc_neuron_dict.items():
+            first_neuron = cluster_index * exc_cluster_size
+            last_neuron = (first_neuron + exc_cluster_size) - 1
+            external_node_exc = external_nodes[0]
+            external_node_inh = external_nodes[1]
+            nest.Connect(external_node_exc, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_exc'], syn_spec=self.params['syn_dict_ex_exc'])
+            if first_neuron > 0:
+                nest.Connect(external_node_inh, self.exc_neurons[: first_neuron], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])
+            if (last_neuron+1) < len(self.exc_neurons):
+                nest.Connect(external_node_inh, self.exc_neurons[(last_neuron+1):], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])     
+        
+        # Connect generators to inhibitory neurons
+        for external_node in self.external_node_to_inh_neuron_list:
+            nest.Connect(external_node, self.inh_neurons, conn_spec=self.params['conn_dict_ix'], syn_spec=self.params['syn_dict_ix'])
+
+    # This function was implemented based on the text in Maes et al. (2020) but does not correspond to the code in Julia
+    def __connect_neurons_to_spike_recorders_old(self):
+        """Connect excitatory, inhibitory neurons and also all generators to spike recorders
+        """
+        # Connect excitatory neurons to spike recorder
+        nest.Connect(self.exc_neurons, self.spike_recorder_exc)
+
+        # Connect inhibitory neurons to spike recorder
+        nest.Connect(self.inh_neurons, self.spike_recorder_inh)
+    
+        # Connect all generators to spike recorders
+        for i in range(self.num_exc_clusters):
+            nest.Connect(self.external_node_to_exc_neuron_dict[i][0], self.spike_recorder_generator)
+            nest.Connect(self.external_node_to_exc_neuron_dict[i][1], self.spike_recorder_generator)
+            nest.Connect(self.external_node_to_inh_neuron_list[i], self.spike_recorder_generator)
+    
     def __get_time_constant_dendritic_rate(self, DeltaT=40., DeltaT_seq=100., calibration=100, target_firing_rate=1):
         """Compute time constant of the dendritic AP rate,
 

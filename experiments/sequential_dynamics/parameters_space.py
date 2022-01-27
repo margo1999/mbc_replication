@@ -76,8 +76,11 @@ assert p['inhibit_params']['g_L'] == (p['inhibit_params']['C_m'] / 20.0)
 
 # TODO: External poisson generator for excitatory neurons
 # Parameters of poisson generator to excitatory neurons
-p['exh_rate_ex'] = 18000.0                      # Rate of external excitatory input to excitatory neurons (spikes/s)
-p['inh_rate_ex'] = 4500.0                       # Rate of external inhibitory input to excitatory neurons (spikes/s)
+p['exh_rate_ex'] = 18000.0 + 4500.0                 # Rate of external excitatory input to excitatory neurons (spikes/s)
+p['inh_rate_ex'] = 4500.0                           # Rate of external inhibitory input to excitatory neurons (spikes/s)
+
+p['exh_rate_ex_old'] = 18000.0                      # Rate of external excitatory input to excitatory neurons (spikes/s)
+p['inh_rate_ex_old'] = 4500.0                       # Rate of external inhibitory input to excitatory neurons (spikes/s)
 
 # TODO: External poisson generator for inhibitory neurons
 # Parameters of poisson generator to excitatory neurons
@@ -100,7 +103,7 @@ p['conn_dict_ex_exc'] = {'rule': 'all_to_all'}                      # Connection
 
 # Parameters of inhibitory EX synapses (external to E neurons)
 p['syn_dict_ex_inh'] = {'synapse_model': 'static_synapse',          # Name of synapse model
-                        'weight': -2.4                              # Synaptic weight (pF)
+                        'weight': -0.8                              # Synaptic weight (pF)
                         }
 p['conn_dict_ex_inh'] = {'rule': 'all_to_all'}                      # Connection rule
 
