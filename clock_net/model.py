@@ -165,16 +165,27 @@ class Model:
         """
 
         sim_time = self.params['sim_time']
+        normalization_time = self.params['normalization_time']
+        initial_weight_inputs = self.get_initial_weight_sums(neurons=self.exc_neurons, synapse_type='clopath_synapse')
 
         # Rank() returns the MPI rank of the local process
         if nest.Rank() == 0:
             print('\nSimulating {} ms.'.format(sim_time))
 
-        # TODO: Set actual loop where sequential simulation lasts one hour, current it is only for testing
         for i in tqdm(range(self.params['sim_rounds'])):
             assert (i*sim_time) == nest.biological_time
 
-            nest.Simulate(sim_time)
+            assert sim_time % normalization_time == 0
+            simulate_steps = int(sim_time // normalization_time)
+
+            nest.Prepare()
+            for i in range(0, simulate_steps):
+                nest.Run(normalization_time)
+                #normalization
+                #import pdb; pdb.set_trace()
+                #self.normalize_weights_L1(self.exc_neurons, initial_weight_inputs=initial_weight_inputs)
+                self.normalize_weights(self.exc_neurons, initial_weight_inputs=initial_weight_inputs)
+            nest.Cleanup()
 
             # Simulation is stopped to set a new reference time (origin) for start and stop of the generators, otherwise they would only spike at the beginning
             for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
@@ -192,6 +203,7 @@ class Model:
         self.exc_neurons = nest.Create(self.params['exhibit_model'],
                                        self.num_exc_neurons,
                                        params=self.params['exhibit_params'])
+        #import pdb; pdb.set_trace()
         print(f"Create {self.num_exc_neurons=} excitatory neurons...")
 
         # Create inhibitory population
@@ -366,6 +378,44 @@ class Model:
                             'weight': conns_weights}
 
             nest.Connect(conns_src, conns_tg, 'one_to_one', syn_dict)
+        
+    def normalize_weights_L1(self, neurons_to_be_normalized, initial_weight_inputs):
+       Wmin, Wmax = self.params['syn_dict_ee']['Wmin'], self.params['syn_dict_ee']['Wmax']
+       for neuron in neurons_to_be_normalized:
+            conn = nest.GetConnections(target=neuron, synapse_model="clopath_synapse")
+            w = np.array(conn.weight)
+            w_normed = w / sum(abs(w))  # L1-norm
+            new_weights = initial_weight_inputs[neuron.global_id] * w_normed
+            new_weights = np.clip(new_weights, Wmin, Wmax)
+            conn.set(weight=new_weights)
+
+            # Tests
+            assert np.prod(np.array(conn.weight) <= Wmax)
+            assert np.prod(np.array(conn.weight) >= Wmin)
+
+    def normalize_weights(self, neurons_to_be_normalized, initial_weight_inputs):
+        Wmin, Wmax = self.params['syn_dict_ee']['Wmin'], self.params['syn_dict_ee']['Wmax']
+        for neuron in neurons_to_be_normalized:
+            conn = nest.GetConnections(target=neuron, synapse_model="clopath_synapse")
+            w = np.array(conn.weight)
+            new_weights = w - (sum(abs(w)) - initial_weight_inputs[neuron.global_id]) / len(w)
+            new_weights = np.clip(new_weights, Wmin, Wmax)
+            conn.set(weight=new_weights)
+
+            # Tests
+            assert np.prod(np.array(conn.weight) <= Wmax)
+            assert np.prod(np.array(conn.weight) >= Wmin)
+
+    def get_initial_weight_sums(self, neurons, synapse_type=None):
+        initial_weight_sums_dict = {}
+        for neuron in neurons:
+            conn = nest.GetConnections(target=neuron, synapse_model=synapse_type)
+            num_connections = len(conn)
+            initial_weight_sums_dict[neuron.global_id] = num_connections * self.params['syn_dict_ee']['weight']
+            # This test only gives correct result if the function is called before any weight changes TODO: remove later
+            assert np.allclose(initial_weight_sums_dict[neuron.global_id], sum(abs(np.array(conn.weight))))
+        return initial_weight_sums_dict
+            
 
     def __get_time_constant_dendritic_rate(self, DeltaT=40., DeltaT_seq=100., calibration=100, target_firing_rate=1):
         """Compute time constant of the dendritic AP rate,
