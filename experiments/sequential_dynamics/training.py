@@ -10,6 +10,8 @@ import nest
 import sys
 import time
 import numpy as np
+import os
+from pprint import pprint
 
 from clock_net import model, helper
 
@@ -38,6 +40,7 @@ def generate_reference_data():
         array_id = 0
 
     params = PL[array_id]
+    resultpath = helper.get_data_path(params['data_path'], params['label'])
 
     # start time 
     time_start = time.time()
@@ -57,7 +60,17 @@ def generate_reference_data():
     time_create = time.time()
 
     # ###############################################################
-    # connect the netwok
+    # save params to txt file
+    # ===============================================================
+    parameterspacepath = os.path.join(resultpath, 'parameter_space.txt')
+    with open(parameterspacepath, 'wt') as file:
+        pprint(params, stream=file)
+        file.close()
+
+    # TODO: Add time measurement 
+
+    # ###############################################################
+    # connect the network
     # ===============================================================
     model_instance.connect()
     time_connect = time.time()
@@ -66,6 +79,7 @@ def generate_reference_data():
     if params['store_connections']:
         model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections_before')
     time_store_connection_before = time.time()
+
     # ###############################################################
     # simulate the network
     # ===============================================================
@@ -77,7 +91,9 @@ def generate_reference_data():
         model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections')
     time_store_connection_after = time.time()
 
-    print(
+    def print_times(file=sys.stdout):
+
+        print(
         '\nTimes of Rank {}:\n'.format(
             nest.Rank()) +
         '  Total time:                 {:.3f} s\n'.format(
@@ -100,14 +116,27 @@ def generate_reference_data():
             time_store_connection_before) +
         '  Time to store connections:  {:.3f} s\n'.format(
             time_store_connection_after -
-            time_simulate))
+            time_simulate),
+            
+            file=file)
+    
+    print_times()
+
+    # ###############################################################
+    # save times to txt file
+    # ===============================================================
+    timepath = os.path.join(resultpath, 'simulation_times.txt')
+    print_times(file=open(timepath, 'a'))
+
+
+    return resultpath
 
 if __name__ == '__main__':    
     from figures import plot_results
     import matplotlib.pyplot as plt
 
-    generate_reference_data()
-    plot_results.plot_results()
+    resultpath = generate_reference_data()
+    plot_results.plot_results(os.path.join(resultpath,f"simulation_finished"))
     plt.show()
 
     

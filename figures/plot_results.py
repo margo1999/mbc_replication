@@ -2,8 +2,9 @@ import figures.plot_spikes as plot_spikes
 import figures.plot_weight_matrix as plot_weight_matrix
 
 import matplotlib.pyplot as plt
+from pickle import dump
 
-def plot_results():
+def plot_results(outfilename=None):
 
     with plt.rc_context({
 
@@ -14,11 +15,34 @@ def plot_results():
             'font.family': 'sans-serif',
             'text.usetex': False
             }):
-        figure, axes = plt.subplots(1,3)
+        figure, axes = plt.subplots(1,4)
         plot_spikes.plot_spikes(axes[0])
-        plot_weight_matrix.plot_weight_matrices(axes=[axes[1], axes[2]])
+        plot_weight_matrix.plot_weight_matrices(axes=[axes[1], axes[2], axes[3]])
         figure.tight_layout()
-    
+
+        if outfilename:
+            dump(figure, open(outfilename, "wb"))
+            figure.savefig(outfilename + '.png')
+        
+def plot_2_mins_results(spikefilename, connectionsfilename, outfilename=None):
+     with plt.rc_context({
+
+            # plot settings 
+            'font.size': 8,
+            'legend.fontsize': 6,
+            'figure.figsize': (10,5),
+            'font.family': 'sans-serif',
+            'text.usetex': False
+            }):
+        figure, axes = plt.subplots(1,2)
+        plot_spikes.plot_2_mins_spikes(axes[0], spikefilename)
+        plot_weight_matrix.plot_2_mins_weight_matrix(axes[1], connectionsfilename)
+        figure.tight_layout()
+
+        if outfilename:
+            dump(figure, open(outfilename + '.pickle', "wb"))
+            figure.savefig(outfilename + '.png')
+        plt.close(fig=figure)
 
 if __name__ == '__main__':
     plot_results()

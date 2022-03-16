@@ -3,3 +3,6 @@
 *.npy
 data/sequence_learning_performance/sequence_learning_and_prediction/parameters_space.py
 nestml_models/cpp_code
+*.pickle
+data
+*.DS_Store

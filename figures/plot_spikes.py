@@ -7,6 +7,7 @@ from collections import defaultdict
 import clock_net.plot_helper as plot_helper
 from clock_net.helper import load_data, load_spike_data
 from clock_net import helper as helper
+from pickle import load
 
 def plot_spikes(ax=None):
     """[summary]
@@ -44,12 +45,30 @@ def plot_spikes(ax=None):
     else:
         data_path = helper.get_data_path(params['data_path'], params['label'])
 
-    # load spikes from reference data
-    inh_spikes = load_spike_data(data_path, 'inh_spikes')
-    exh_spikes = load_spike_data(data_path, 'exh_spikes')
-    gen_spikes = load_spike_data(data_path, 'generator_spikes')
+    allspiketypes = True
+    if(not allspiketypes):
+        filename = os.path.join(data_path, f"spikes_{params['training_iterations']-1}.pickle")
+        spikes = load(open(filename, "rb"))
+        exh_spikes_array = np.transpose([spikes['sr_senders_exh'], spikes['sr_times_exh']])
 
-    plot_helper.plot_spikes(ax=ax, exh_spikes=exh_spikes, inh_spikes=inh_spikes, gen_spikes=gen_spikes)
+        plot_helper.plot_spikes(ax=ax, exh_spikes=exh_spikes_array)
+    else:
+        inh_spikes = load_spike_data(data_path, 'inh_spikes')
+        exh_spikes = load_spike_data(data_path, 'exh_spikes')
+        gen_spikes = load_spike_data(data_path, 'generator_spikes')
+        plot_helper.plot_spikes(ax=ax, exh_spikes=exh_spikes, inh_spikes=inh_spikes, gen_spikes=gen_spikes)
+
+def plot_2_mins_spikes(ax=None, filename=None):
+    assert ax is not None, 'Need axes object.'
+    assert filename is not None, 'Need filename.'
+
+    # load spikes from reference data
+    spikes = load(open(filename, "rb"))
+
+    exh_spikes_array = np.transpose([spikes['sr_senders_exh'], spikes['sr_times_exh']])
+    print(f"{exh_spikes_array.size=}", f"{len(spikes['sr_senders_exh'])=}", f"{len(spikes['sr_times_exh'])=}")
+    
+    plot_helper.plot_spikes(ax=ax, exh_spikes=exh_spikes_array)
 
 if __name__ == '__main__':
     with plt.rc_context({

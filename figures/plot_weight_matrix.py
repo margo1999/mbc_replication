@@ -16,8 +16,17 @@ def plot_weight_matrices(axes=None):
 
     plot_helper.plot_weight_matrix(ax=axes[0], connections=old_connections, title='old weight matrix')
     plot_helper.plot_weight_matrix(ax=axes[1], connections=new_connections, title='new weight matrix')
+    plot_helper.plot_diff_weight_matrix(ax=axes[2], connections_new=new_connections, connections_old=old_connections, title='difference of matrices')
 
     print(np.allclose(plot_helper.matrix_from_connections(old_connections), plot_helper.matrix_from_connections(new_connections)))
+
+def plot_2_mins_weight_matrix(ax=None, filename=None):
+    assert ax is not None, 'Need axes object.'
+    assert filename is not None, 'Need filename.'
+
+    connections = np.load(filename)
+    plot_helper.plot_weight_matrix(ax=ax, connections=connections, title='weight strength')
+
 
 def get_data_path():
     path_dict = {} 
@@ -49,7 +58,7 @@ if __name__ == '__main__':
             'font.family': 'sans-serif',
             'text.usetex': False
             }):
-        figure, axes = plt.subplots(1,2)
+        figure, axes = plt.subplots(1,3)
         plot_weight_matrices(axes)
         figure.tight_layout()
         plt.show()
