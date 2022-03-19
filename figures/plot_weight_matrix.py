@@ -19,6 +19,22 @@ def plot_weight_matrices(axes=None):
     plot_helper.plot_diff_weight_matrix(ax=axes[2], connections_new=new_connections, connections_old=old_connections, title='difference of matrices')
 
     print(np.allclose(plot_helper.matrix_from_connections(old_connections), plot_helper.matrix_from_connections(new_connections)))
+# def plot_weight_matrices(axes=None):
+
+#     assert axes is not None, 'Need axes object.'
+
+#     data_path = get_data_path()
+#     path_old_weights = os.path.join(data_path, 'ei_connections_before.npy')
+#     path_new_weights = os.path.join(data_path, 'ei_connections.npy')
+
+#     old_connections = np.load(path_old_weights)
+#     new_connections = np.load(path_new_weights)
+
+#     plot_helper.plot_weight_matrix(ax=axes[0], connections=old_connections, title='old weight matrix')
+#     plot_helper.plot_weight_matrix(ax=axes[1], connections=new_connections, title='new weight matrix')
+#     plot_helper.plot_diff_weight_matrix(ax=axes[2], connections_new=new_connections, connections_old=old_connections, title='difference of matrices')
+
+#     print(np.allclose(plot_helper.matrix_from_connections(old_connections), plot_helper.matrix_from_connections(new_connections)))
 
 def plot_2_mins_weight_matrix(ax=None, filename=None):
     assert ax is not None, 'Need axes object.'

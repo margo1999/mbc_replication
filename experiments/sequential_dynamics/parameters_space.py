@@ -1,8 +1,11 @@
 import parameters as para
 import numpy as np
 
-DELAY = 0.1
-TEST_NETWORK = True # The test network has fewer nodes than the orginal network, therefore it makes it faster to simulate and easier to debug
+RESOLUTION = 0.1
+TEST_NETWORK = True # Test network has fewer nodes than the orginal network, therefore it makes it faster to simulate and easier to debug
+SEED = 1
+
+np.random.seed(SEED)
 
 p = para.ParameterSpace({})
 
@@ -25,12 +28,13 @@ else:
 ###################################################### all node models ######################################################
 
 # Parameters of excitatory neurons
+V_m_exc = np.random.uniform(low=-60.0, high=-52, size=240) # TODO make this generalized and add to dictionary
 p['exhibit_model'] = 'aeif_cond_diff_exp_clopath'
-p['exhibit_params'] = {'A_LTD': 0.00014,         # LTD amplitude (pa/mV)
+p['exhibit_params'] = {'A_LTD': 0.00014,        # LTD amplitude (pa/mV)
                     'A_LTP': 0.0018,            # LTP amplitude (pa/mV^2)
                     'C_m': 300.0,               # Capacitance of the membrane (pF)
                     'V_reset': -60.0,           # Reset potential (for all neurons the same) (mV)
-                    'V_peak': 20.0,            # Spike detection threshold (mV)
+                    'V_peak': 20.0,             # Spike detection threshold (mV)
                     'V_th_max': -52.0 + 10.0,   # Maximum threshold that can be reached (mV) - V_th_max = V_th_rest + A_T, where A_T is adaptive threshold increase constant          
                     'V_th_rest': -52.0,         # Threshold V_th is relaxing back to V_th_rest (mV) 
                     't_ref': 5.0,               # Absolute refactory period (ms)
@@ -52,15 +56,16 @@ p['exhibit_params'] = {'A_LTD': 0.00014,         # LTD amplitude (pa/mV)
                     'theta_plus': -49.0,        # LTP threshold (mV)
                     'tau_u_bar_minus': 10.0,    # Time constant of low pass filtered postsynaptic membrane potential (LTD) (ms)
                     'tau_u_bar_plus': 7.0,      # Time constant of low pass filtered postsynaptic membrane potential (LTP) (ms)
-                    'V_m': -60.0,               # Initial Membrane potential (mV) - TODO: distribute values randomly: V_m = [V_reset + (V_th_rest-V_reset)*rand() for i in range(numberOfExcNeurons)
+                    'V_m': -60.0,               # Initial Membrane potential (mV)
                     'u_bar_minus': 0.0,         # Initial low-pass filtered membrane potential
                     'u_bar_plus': 0.0,          # Initial low-pass filtered membrane potential
-                    'delay_u_bars': 0.1, 
+                    'delay_u_bars': RESOLUTION, # Delay with which u_bar_[plus/minus] are processed to compute the synaptic weights 
                     }
 assert p['exhibit_params']['V_th_max'] == (p['exhibit_params']['V_th_rest']+ 10.0)
 assert p['exhibit_params']['g_L'] == (p['exhibit_params']['C_m'] / 20.0)
 
 # Parameters of inhibitory neurons
+V_m_inh = np.random.uniform(low=-60.0, high=-52, size=60) # TODO make this generalized and add to dictionary
 p['inhibit_model'] = 'iaf_cond_diff_exp'
 p['inhibit_params'] = {'C_m': 300.0,            # Capacitance of the membrane (pF)
                     'E_L': -62.0,               # Leak reversal potential aka resting potential (mV)
@@ -75,25 +80,26 @@ p['inhibit_params'] = {'C_m': 300.0,            # Capacitance of the membrane (p
                     'tau_syn_ex_rise': 1.0,     # Rise time of the excitatory synaptic difference of exp functions (ms)
                     'tau_syn_in_decay': 2.0,    # Decay time of the inhibitory synaptic difference of exp functions (ms)
                     'tau_syn_in_rise': 0.5,     # Rise time of the inhibitory synaptic difference of exp functions (ms)
-                    'V_m': -60.0                # Membrane potential (mV) - TODO: distribute values randomly: V_m = [V_reset + (V_th_rest-V_reset)*rand() for i in range(numberOfInhNeurons)
+                    'V_m': -60.0                # Membrane potential (mV)
                     }
 assert p['inhibit_params']['g_L'] == (p['inhibit_params']['C_m'] / 20.0)
 
-# TODO: External poisson generator for excitatory neurons
+###################################################### poisson generator rates ######################################################
+
 # Parameters of poisson generator to excitatory neurons
 p['exh_rate_ex'] = 18000.0 + 4500.0                 # Rate of external excitatory input to excitatory neurons (spikes/s)
 p['inh_rate_ex'] = 4500.0                           # Rate of external inhibitory input to excitatory neurons (spikes/s)
 
+# Rates discribed in the paper but differ from original implementation
 p['exh_rate_ex_old'] = 18000.0                      # Rate of external excitatory input to excitatory neurons (spikes/s)
 p['inh_rate_ex_old'] = 4500.0                       # Rate of external inhibitory input to excitatory neurons (spikes/s)
 
-# TODO: External poisson generator for inhibitory neurons
 # Parameters of poisson generator to excitatory neurons
-p['exh_rate_ix'] = 2250.0                       # Rate of external excitatory input to inhibitory neurons (spikes/s)
+p['exh_rate_ix'] = 2250.0                           # Rate of external excitatory input to inhibitory neurons (spikes/s)
 
 # Random dynamics for excitatory and inhibitory neurons
-p['random_dynamics_ex'] = 4500.0                # Rate of external excitatory input to excitatory neurons (spikes/s)
-p['random_dynamics_ix'] = 2250.0                # Rate of external excitatory input to inhibitory neurons (spikes/s)
+p['random_dynamics_ex'] = 4500.0                    # Rate of external excitatory input to excitatory neurons (spikes/s)
+p['random_dynamics_ix'] = 2250.0                    # Rate of external excitatory input to inhibitory neurons (spikes/s)
 
 ###################################################### connection and synapse dictionaries ######################################################
 
@@ -106,92 +112,100 @@ general_RNN_conn_dict = {'rule': 'pairwise_bernoulli',              # Connection
 
 # Parameters of excitatory EX synapses (external to E neurons)
 p['syn_dict_ex_exc'] = {'synapse_model': 'static_synapse',          # Name of synapse model
-                        'weight': 1.6,                              # Synaptic weight (pF) 
+                        'weight': 1.6,                              # Synaptic weight (pF)
+                        'delay': RESOLUTION                         # Synaptic delay (ms)
                         }
 p['conn_dict_ex_exc'] = {'rule': 'all_to_all'}                      # Connection rule
 
 # Parameters of inhibitory EX synapses (external to E neurons)
 p['syn_dict_ex_inh'] = {'synapse_model': 'static_synapse',          # Name of synapse model
-                        'weight': -0.8                              # Synaptic weight (pF)
+                        'weight': -0.8,                             # Synaptic weight (pF)
+                        'delay': RESOLUTION                         # Synaptic delay (ms)
                         }
 p['conn_dict_ex_inh'] = {'rule': 'all_to_all'}                      # Connection rule
 
 # Parameters of excitatory EX synapses (external to E neurons) during random dynamics
 p['syn_dict_ex_random'] = {'synapse_model': 'static_synapse',       # Name of synapse model
-                        'weight': 1.6,                              # Synaptic weight (pF) 
+                        'weight': 1.6,                              # Synaptic weight (pF)
+                        'delay': RESOLUTION                         # Synaptic delay (ms)
                         }
 p['conn_dict_ex_random'] = {'rule': 'all_to_all'}                   # Connection rule
 
 # Parameters of IX synapses (external to I neurons)
 p['syn_dict_ix'] = {'synapse_model': 'static_synapse',              # Name of synapse model
-                        'weight': 1.52                              # Synaptic weight (pF)
+                        'weight': 1.52,                             # Synaptic weight (pF)
+                        'delay': RESOLUTION                         # Synaptic delay (ms)
                         }
 p['conn_dict_ix'] = {'rule': 'all_to_all'}                          # Connection rule
 
 # Parameters of IX synapses (external to I neurons)
 p['syn_dict_ix_random'] = {'synapse_model': 'static_synapse',       # Name of synapse model
-                        'weight': 1.52                              # Synaptic weight (pF)
+                        'weight': 1.52,                             # Synaptic weight (pF)
+                        'delay': RESOLUTION                         # Synaptic delay (ms)
                         }
 p['conn_dict_ix_random'] = {'rule': 'all_to_all'}                   # Connection rule
 
 # Parameters of EE synapses (voltage-based STDP)
-p['syn_dict_ee'] = {'synapse_model': 'clopath_synapse',             # Name of synapse model - TODO: In MATLAB code the weights might be randomized
+p['syn_dict_ee'] = {'synapse_model': 'clopath_synapse',             # Name of synapse model
                     'weight': 2.83,                                 # Initial synaptic weight (pF)
                     'Wmax': 32.68,                                  # Maximum allowed weight (pF)
                     'Wmin': 1.45,                                   # Minimum allowed weight (pF)
                     'tau_x': 3.5,                                   # Time constant of low pass filtered presynaptic spike train in recurrent network (ms)
-                    'delay': 0.1                                   # Synaptic delay (ms) # TODO: should always be the same as resolution
+                    'delay': RESOLUTION                             # Synaptic delay (ms)
                     }
 p['conn_dict_ee'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 # parameters for II synapses
 p['syn_dict_ii'] = {'synapse_model': 'static_synapse',              # Name of synapse model
-                    'weight': - 20.91                                 # Synaptic weight (pF)
+                    'weight': - 20.91,                              # Synaptic weight (pF)
+                    'delay': RESOLUTION                             # Synaptic delay (ms)
                     }
 p['conn_dict_ii'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 # parameters for IE synapses 
 p['syn_dict_ie'] = {'synapse_model': 'static_synapse',              # Name of synapse model
-                    'weight': 1.96                                  # Synpatic weight (pF)
+                    'weight': 1.96,                                 # Synpatic weight (pF)
+                    'delay': RESOLUTION                             # Synaptic delay (ms)
                    }
 p['conn_dict_ie'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
-#TODO: check if synapse model is correct + need to add Wmin but for synpase implementation there is no Wmin key in dict
 # parameters for EI synapses 
 # p['syn_dict_ei'] = {'synapse_model': 'static_synapse',              # Name of synapse model
 #                     'weight': 0.0                                 # Synaptic weight (pF)
 #                     }
 p['syn_dict_ei'] = {'synapse_model': 'vogels_sprekeler_synapse',    # Name of synapse model
                     'weight': - 62.87,                              # Initial synpatic weight (pF)
-                    'eta': 1.0,                                     # TODO: Should be the same as the learning rate, in Julia code it is 1.0 but in the paper it is 10^-5
-                    'alpha': 2.0 * 3.0 * 20.0,                      # TODO: set r_0 and tau_y above -> alpha = 2*r_0*tau_y
-                    'Wmax': - 243.0,                                # Maximum allowed weight (pF)
-                    'Wmin': -48.7                                   # Minimum allowed weight (pF)
+                    'eta': 1.0,                                     # Learning rate/ Amplitude of inhibitory plasticity - INCONSISTENCY: orginal implementation: eta=1.0 & paper: eta=Ainh=10^-5
+                    'alpha': 2.0 * 0.003 * 20.0,                    # Constant depression set (= 2 * r_0 * tau_y = 2 * target_firing_rate * tau) # TODO: Unit of target_firing_rate might be wrong!
+                    'Wmax': -243.0,                                 # Maximum allowed weight (pF)
+                    'Wmin': -48.7,                                  # Minimum allowed weight (pF)
+                    'delay': RESOLUTION,                            # Synaptic delay (ms)
+                    'tau': 20.0                                     # Time constant of low pass filtered spike train
                    }
 p['conn_dict_ei'] = general_RNN_conn_dict                           # Connection dictionary for RNN neurons
 
 ###################################################### simulation parameters ######################################################
 
 # simulation parameters 
-p['dt'] = 0.1                                                                                   # Simulation time resolution (ms)
-p['overwrite_files'] = True                                                                     # True: data will be overwritten; False: a NESTError is raised if the files already exist
-p['seed'] = para.ParameterRange([1])                                                            # Seed for NEST
-p['print_simulation_progress'] = False                                                          # Print the time progress
-p['n_threads'] = 1                                                                              # Number of threads per MPI process 
-p['idend_record_time'] = 8.                                                                     # Time interval after the external stimulation at which the dendritic current is recorded TODO: Do we need this?
-p['evaluate_performance'] = True                                                                # True: we monitor the dendritic current at a certain time steps during the simulation. This then is used for the prediction performance assessment
-p['evaluate_replay'] = False                                                                    # TODO: What is this?  
-p['store_connections'] = True                                                                   # Stores connection in a seperate file (bool)
-p['load_connections'] = False                                                                   # Loads connection from existing file (bool)
-#p['sparse_first_char'] = False                                                                 # If turned on, the dAP of a subset of neurons in the subpopulation representing 
-                                                                                                # First sequence elements is activated externally 
-p['cluster_stimulation_time'] = 10.0                                                            # Stimulation time from external input to excitatory cluster (ms)
-p['stimulation_gap'] = 5.0                                                                      # Gap between to stimulations of excitatory clusters (ms) 
-p['round_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])  # Simulation time for one round (ms)
-p['training_iterations'] = 1                                                                   # Indicates how many iterations there are during the training phase. One iteration corresponds to approximately 2 minutes. (int)
-p['normalization_time'] = 20.0                                                                  # Time after normalization is necessary (ms)
-p['random_dynamics'] = False                                                                    # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
-p['random_dynamics_time'] = 1.0 * 60.0 #* 60.0 * 1000.0                                         # Time of spontaneous dynamics (ms)
+p['dt'] = RESOLUTION                                                                                # Simulation time resolution (ms)
+p['overwrite_files'] = True                                                                         # True: data will be overwritten; False: a NESTError is raised if the files already exist
+p['seed'] = SEED #para.ParameterRange([1])                                                          # Seed for NEST
+p['print_simulation_progress'] = False                                                              # Print the time progress
+p['n_threads'] = 1                                                                                  # Number of threads per MPI process 
+p['idend_record_time'] = 8.                                                                         # Time interval after the external stimulation at which the dendritic current is recorded TODO: Do we need this?
+p['evaluate_performance'] = True                                                                    # True: we monitor the dendritic current at a certain time steps during the simulation. This then is used for the prediction performance assessment
+p['evaluate_replay'] = False                                                                        # TODO: What is this?  
+p['store_connections'] = True                                                                       # Stores connection in a seperate file (bool)
+p['load_connections'] = False                                                                       # Loads connection from existing file (bool)
+#p['sparse_first_char'] = False                                                                     # If turned on, the dAP of a subset of neurons in the subpopulation representing 
+                                                                                                    # First sequence elements is activated externally 
+p['cluster_stimulation_time'] = 10.0                                                                # Stimulation time from external input to excitatory cluster (ms)
+p['stimulation_gap'] = 5.0                                                                          # Gap between to stimulations of excitatory clusters (ms) 
+p['round_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])    # Simulation time for one round (ms)
+p['training_iterations'] = 1                                                                        # Indicates how many iterations there are during the training phase. One iteration corresponds to approximately 2 minutes. (int)
+p['normalization_time'] = 20.0                                                                      # Time after normalization is necessary (ms)
+p['random_dynamics'] = False                                                                        # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
+p['random_dynamics_time'] = 1.0 * 60.0 #* 60.0 * 1000.0                                             # Time of spontaneous dynamics (ms)
 
 ###################################################### data path dict ######################################################
 

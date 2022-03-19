@@ -74,7 +74,8 @@ def plot_weight_matrix(ax=None, connections=None, title=''):
         ax.set_title(title, fontsize='xx-large')
         ax.set_xlabel('presynaptic neuron [id]')
         ax.set_ylabel('postsynaptic neuron [id]')
-        ax.imshow(weight_matrix, cmap='binary')
+        mappable = ax.imshow(weight_matrix, cmap='binary')
+        plt.colorbar(mappable, ax=ax)
 
 def plot_diff_weight_matrix(ax=None, connections_new=None, connections_old=None, title=''):
     """[summary]
@@ -94,45 +95,62 @@ def plot_diff_weight_matrix(ax=None, connections_new=None, connections_old=None,
     weight_matrix_old = matrix_from_connections(connections_old)
     weight_matrix = weight_matrix_new - weight_matrix_old
 
+    inhibitory_plasticity = False
+    excitatory_plasticity = True
+    
     # TODO make this general
-    cluster_max_change = np.zeros((8,8))
-    cluster_min_change = np.zeros((8,8))
-    cluster_mean_change = np.zeros((8,8))
-    for j in range(8):
-        j_start = j * 30
-        j_stop = j_start + 30 
+    if excitatory_plasticity:
+        cluster_max_change = np.zeros((8,8))
+        cluster_min_change = np.zeros((8,8))
+        cluster_mean_change = np.zeros((8,8))
+        for j in range(8):
+            j_start = j * 30
+            j_stop = j_start + 30 
 
-        for k in range(8):
-            k_start = k * 30 
-            k_stop = k_start + 30
+            for k in range(8):
+                k_start = k * 30 
+                k_stop = k_start + 30
 
-            cluster_max_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].max()
-            cluster_min_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].min()
-            cluster_mean_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].mean()
-	
-    np.set_printoptions(linewidth=300, suppress=True, precision=15)
-    print('Max-pool:')
-    print(cluster_max_change.T)
-    print('Min-pool:')
-    print(cluster_min_change.T)
-    print('Mean-pool:')
-    print(cluster_mean_change.T)
+                cluster_max_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].max()
+                cluster_min_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].min()
+                cluster_mean_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].mean()
+        
+        np.set_printoptions(linewidth=300, suppress=True, precision=15)
+        print('Max-pool:')
+        print(cluster_max_change.T)
+        print('Min-pool:')
+        print(cluster_min_change.T)
+        print('Mean-pool:')
+        print(cluster_mean_change.T)
+
+    
+    if inhibitory_plasticity:
+        print('inh Max-pool:')
+        print(weight_matrix.max())
+        print('inh Min-pool:')
+        print(weight_matrix.min())
+        print('inh Mean-pool:')
+        print(weight_matrix.mean())
 
 
 
     ax.set_title(title, fontsize='xx-large')
     ax.set_xlabel('presynaptic neuron [id]')
     ax.set_ylabel('postsynaptic neuron [id]')
-    ax.imshow(weight_matrix)
+    mappable = ax.imshow(weight_matrix)
+    plt.colorbar(mappable, ax=ax)
 
 def matrix_from_connections(connections):
     connections = np.asarray(connections)
-    max_neuron = int(max(connections[:,0].max(), connections[:,1].max()))
-    weight_matrix = np.zeros((max_neuron, max_neuron))
+    max_neuron_source = int(connections[:,1].max())
+    min_neuron_source = int(connections[:,1].min())
+    max_neuron_target = int(connections[:,0].max())
+    min_neuron_target = int(connections[:,0].min()) 
+    weight_matrix = np.zeros((max_neuron_target-min_neuron_target+1, max_neuron_source-min_neuron_source+1))
 
     for post, pre, weight in connections:
         #               y           x
-        weight_matrix[int(post)-1, int(pre)-1] = weight 
+        weight_matrix[int(post)-min_neuron_target, int(pre)-min_neuron_source] = weight 
 
     return weight_matrix
 

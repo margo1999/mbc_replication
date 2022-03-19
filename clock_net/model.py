@@ -143,7 +143,7 @@ class Model:
         self.create_spontaneous_dynamics_nodes()
 
         # Set up recording node and establish connection
-        self.record_behaviour_of_exc_neuron(neuronid=210)
+        self.record_behaviour_of_exc_neuron(neuronid=10)
         self.record_behaviour_of_inh_neuron(neuronid=5)
 
     def connect(self):
