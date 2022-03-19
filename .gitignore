@@ -6,4 +6,5 @@ nestml_models/cpp_code
 *.pickle
 data
 *.DS_Store
+test.py
 

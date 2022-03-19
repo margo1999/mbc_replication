@@ -136,6 +136,8 @@ def generate_reference_data():
 if __name__ == '__main__':    
     from figures import plot_results
     import matplotlib.pyplot as plt
+    import matplotlib
+    matplotlib.use("Agg")
 
     resultpath = generate_reference_data()
     plot_results.plot_results(os.path.join(resultpath,f"simulation_finished"))
