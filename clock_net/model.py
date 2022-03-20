@@ -193,7 +193,7 @@ class Model:
         if self.params['random_dynamics']:
             self.simulate_random_dynamics(random_dynamics_time, normalization_time, initial_weight_inputs_dict)
 
-    def record_behaviour_of_exc_connection(self):
+    def record_behaviour_of_exc_connection(self): # TODO: only for 1 round 
         conn = nest.GetConnections(source=self.exc_neurons[31 - 1], target=self.exc_neurons[30:60], synapse_model='clopath_synapse')[2]
         print(f"{conn.target=}")
         sourceid = conn.source
@@ -207,25 +207,24 @@ class Model:
         nest.Disconnect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse'})
         nest.Connect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse_wr'}) # TODO: Will be ignored in save_connections
 
-    def record_behaviour_of_inh_neuron(self, neuronid = None):
+    def record_behaviour_of_inh_neuron(self, neuronid = None): #TODO: make record duration more general
          if neuronid is not None:
-            self.mm_inh = nest.Create('multimeter', params={'record_from': ['g_ex__X__spikeExc', 'g_in__X__spikeInh', 'V_m'], 'interval': 0.1})
+            self.mm_inh = nest.Create('multimeter', params={'record_from': ['g_ex__X__spikeExc', 'g_in__X__spikeInh', 'V_m'], 'interval': 0.1, 'stop': 120.0})
             nest.Connect(self.mm_inh, self.inh_neurons[neuronid - 1])
 
-    def record_behaviour_of_exc_neuron(self, neuronid = None):
+    def record_behaviour_of_exc_neuron(self, neuronid = None): #TODO: make record duration more general
          if neuronid is not None:
-            self.mm_exc = nest.Create('multimeter', params={'record_from': ['g_ex', 'g_in', 'u_bar_bar', 'u_bar_minus', 'u_bar_plus', 'V_m', 'V_th', 'w'], 'interval': 0.1})
+            self.mm_exc = nest.Create('multimeter', params={'record_from': ['g_ex', 'g_in', 'u_bar_bar', 'u_bar_minus', 'u_bar_plus', 'V_m', 'V_th', 'w'], 'interval': 0.1, 'stop': 120.0})
             nest.Connect(self.mm_exc, self.exc_neurons[neuronid - 1])
 
     def train_RNN(self, round_duration, normalization_time, initial_weight_inputs_dict):
   
         training_iterations = self.params['training_iterations']
-        rounds = 1 #(-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration
+        rounds = (-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration
         for two_min_unit in tqdm(range(training_iterations)): 
 
             for round_ in tqdm(range(rounds)):
 
-                print(f"\n{round_=}")
                 esttime = ((round_ + (rounds * two_min_unit)) * (round_duration)) + two_min_unit * 3000.0
                 curtime = nest.biological_time
                 assert esttime == curtime
@@ -283,14 +282,14 @@ class Model:
                 # Save current spike behaviour under random input dynamics
                 sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
                 # print(f"{len(sr_times_exh)=}", f"{sr_times_exh[0]=}", f"{sr_times_exh[-1]=}")
-                # spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
+                spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
                 # print(f"{len(spikes)=}", f"{len(spikes['sr_times_exh'])=}")
-                # spikefilepath = os.path.join(self.data_path, f"spikes_{two_min_unit}.pickle")
-                # dump(spikes, open(spikefilepath, "wb"))
+                spikefilepath = os.path.join(self.data_path, f"spikes_{two_min_unit}.pickle")
+                dump(spikes, open(spikefilepath, "wb"))
 
-                # # Plot and save plot of connection and spike behaviour as png and pickle file
-                # plotsfilepath = os.path.join(self.data_path, f"plots_{two_min_unit}")
-                # plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
+                # Plot and save plot of connection and spike behaviour as png and pickle file
+                plotsfilepath = os.path.join(self.data_path, f"plots_{two_min_unit}")
+                plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
 
                 # # TODO: Save sprectrum 
 
