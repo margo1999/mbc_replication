@@ -204,7 +204,7 @@ p['stimulation_gap'] = 5.0                                                      
 p['round_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])    # Simulation time for one round (ms)
 p['training_iterations'] = 1                                                                        # Indicates how many iterations there are during the training phase. One iteration corresponds to approximately 2 minutes. (int)
 p['normalization_time'] = 20.0                                                                      # Time after normalization is necessary (ms)
-p['random_dynamics'] = False                                                                        # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
+p['random_dynamics'] = True                                                                        # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
 p['random_dynamics_time'] = 1.0 * 60.0 #* 60.0 * 1000.0                                             # Time of spontaneous dynamics (ms)
 
 ###################################################### data path dict ######################################################

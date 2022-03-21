@@ -191,7 +191,22 @@ class Model:
         self.train_RNN(round_duration, normalization_time, initial_weight_inputs_dict)
 
         if self.params['random_dynamics']:
-            self.simulate_random_dynamics(random_dynamics_time, normalization_time, initial_weight_inputs_dict)
+            iterations = int(np.ceil(random_dynamics_time / 120000.0))
+            for i in range(iterations):
+                self.simulate_random_dynamics(120000.0, normalization_time, initial_weight_inputs_dict)
+                sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
+                
+                file_name = f"ee_connections_{30+i}.npy"
+                self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
+                connectionsfilepath = os.path.join(self.data_path, file_name)
+                spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
+                spikefilepath = os.path.join(self.data_path, f"spikes_{30 + i}.pickle")
+                dump(spikes, open(spikefilepath, "wb"))
+
+                # Plot and save plot of connection and spike behaviour as png and pickle file
+                plotsfilepath = os.path.join(self.data_path, f"plots_{30 + i}")
+                plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
+                
 
     def record_behaviour_of_exc_connection(self): # TODO: only for 1 round 
         conn = nest.GetConnections(source=self.exc_neurons[31 - 1], target=self.exc_neurons[30:60], synapse_model='clopath_synapse')[2]
@@ -220,7 +235,7 @@ class Model:
     def train_RNN(self, round_duration, normalization_time, initial_weight_inputs_dict):
   
         training_iterations = self.params['training_iterations']
-        rounds = (-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration
+        rounds = (-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration # TODO: int(np.ceil(2*60*1000/120))
         for two_min_unit in tqdm(range(training_iterations)): 
 
             for round_ in tqdm(range(rounds)):
@@ -237,7 +252,7 @@ class Model:
 
                     nest.Run(normalization_time)
                 
-                    # TODO: Is normalization realy necessary every 20 ms. Creates large overhead.
+                    # TODO: Is normalization really necessary every 20 ms. Creates large overhead.
                     #self.normalize_weights('clopath_synapse', initial_weight_inputs_dict)
 
                 nest.Cleanup()
@@ -352,21 +367,21 @@ class Model:
 
         self.spike_recorder_exc.n_events = 0 # reset the spike counts
 
-        conn_ee_weights_between, conn_ei_weights_between = self.get_plastic_connections()
-        self.simulate_random_dynamics(sim_time, normalization_time, initial_weight_inputs)
+        #conn_ee_weights_between, conn_ei_weights_between = self.get_plastic_connections()
+        #self.simulate_random_dynamics(sim_time, normalization_time, initial_weight_inputs)
 
         # unfreeze weights
         self.unfreeze_weights()
 
         # TEST
         conn_ee_weights_after, conn_ei_weights_after = self.get_plastic_connections()
-        if not np.allclose(conn_ee_weights_between, conn_ee_weights_after):
-            print(f"{max(abs(np.subtract(conn_ee_weights_after, conn_ee_weights_between)))=}\n")
-            print(f"{len((np.subtract(conn_ee_weights_after, conn_ee_weights_between)))=}\n")
-            print(f"{np.count_nonzero(np.subtract(conn_ee_weights_after, conn_ee_weights_between))=}\n")
+        # if not np.allclose(conn_ee_weights_between, conn_ee_weights_after):
+        #     print(f"{max(abs(np.subtract(conn_ee_weights_after, conn_ee_weights_between)))=}\n")
+        #     print(f"{len((np.subtract(conn_ee_weights_after, conn_ee_weights_between)))=}\n")
+        #     print(f"{np.count_nonzero(np.subtract(conn_ee_weights_after, conn_ee_weights_between))=}\n")
 
-        if not np.allclose(conn_ee_weights_before, conn_ee_weights_between):
-            print(f"{np.subtract(conn_ee_weights_between, conn_ee_weights_before)=}\n")
+        # if not np.allclose(conn_ee_weights_before, conn_ee_weights_between):
+        #     print(f"{np.subtract(conn_ee_weights_between, conn_ee_weights_before)=}\n")
 
         if not np.allclose(conn_ee_weights_before, conn_ee_weights_after):
             print(f"{np.subtract(conn_ee_weights_after, conn_ee_weights_before)=}\n")
