@@ -175,6 +175,7 @@ class Model:
         print(f"Number of II connections: {len(nest.GetConnections(source=self.inh_neurons, target=self.inh_neurons))=}")
         print(f"Number of IX connections: {len(nest.GetConnections(source=self.external_node_to_inh_neuron, target=self.inh_neurons))=}")
 
+# TODO: rename to simulate_RNN or train_RNN?
     def simulate(self):
         """Run simulation by stopping after each round to reset the times of the spike generators.
         """
@@ -206,32 +207,8 @@ class Model:
                 # Plot and save plot of connection and spike behaviour as png and pickle file
                 plotsfilepath = os.path.join(self.data_path, f"plots_{30 + i}")
                 plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
-                
 
-    def record_behaviour_of_exc_connection(self): # TODO: only for 1 round 
-        conn = nest.GetConnections(source=self.exc_neurons[31 - 1], target=self.exc_neurons[30:60], synapse_model='clopath_synapse')[2]
-        print(f"{conn.target=}")
-        sourceid = conn.source
-        targetid = conn.target
-        self.wr = nest.Create('weight_recorder')
-        syn_dict_ee = self.params['syn_dict_ee'].copy()
-        syn_dict_ee['weight_recorder'] = self.wr
-        del(syn_dict_ee['synapse_model'])
-        nest.CopyModel('clopath_synapse', 'clopath_synapse_wr', syn_dict_ee)
-
-        nest.Disconnect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse'})
-        nest.Connect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse_wr'}) # TODO: Will be ignored in save_connections
-
-    def record_behaviour_of_inh_neuron(self, neuronid = None): #TODO: make record duration more general
-         if neuronid is not None:
-            self.mm_inh = nest.Create('multimeter', params={'record_from': ['g_ex__X__spikeExc', 'g_in__X__spikeInh', 'V_m'], 'interval': 0.1, 'stop': 120.0})
-            nest.Connect(self.mm_inh, self.inh_neurons[neuronid - 1])
-
-    def record_behaviour_of_exc_neuron(self, neuronid = None): #TODO: make record duration more general
-         if neuronid is not None:
-            self.mm_exc = nest.Create('multimeter', params={'record_from': ['g_ex', 'g_in', 'u_bar_bar', 'u_bar_minus', 'u_bar_plus', 'V_m', 'V_th', 'w'], 'interval': 0.1, 'stop': 120.0})
-            nest.Connect(self.mm_exc, self.exc_neurons[neuronid - 1])
-
+# TODO: rename to simulate_sequential dynamics?
     def train_RNN(self, round_duration, normalization_time, initial_weight_inputs_dict):
   
         training_iterations = self.params['training_iterations']
@@ -257,6 +234,10 @@ class Model:
 
                 nest.Cleanup()
 
+                # print(f"{nest.GetStatus(self.spike_recorder_exc)=}")
+                # print(f"{nest.GetStatus(self.spike_recorder_inh)=}")
+                # print(f"{nest.GetStatus(self.spike_recorder_generator)=}")
+
                 # Turn off all spike recorders and set spike recorder for exc neurons to 'memory' to record spikes more flexible
                 if two_min_unit + round_ == 0:
                     self.spike_recorder_exc.record_to = "memory" # TODO: Weird behaviour! No spikes are stored if I don't set first record_to and then stop
@@ -265,6 +246,10 @@ class Model:
                     self.spike_recorder_exc.stop = nest.biological_time
                     self.spike_recorder_inh.stop = nest.biological_time
                     self.spike_recorder_generator.stop = nest.biological_time
+
+                    #plot_helper.plot_behaviour_of_exc_connection(self.wr, self.data_path)
+                    plot_helper.plot_behaviour_of_exc_neuron(self.mm_exc, self.data_path, self.params)
+                    plot_helper.plot_behaviour_of_inh_neuron(self.mm_inh, self.data_path, self.params)
 
 
                 # Simulation is stopped to set a new reference time (origin) for start and stop of the generators, otherwise they would only spike at the beginning
@@ -283,10 +268,6 @@ class Model:
                         generators_to_exc[2].origin += round_duration
                     
                     self.external_node_to_inh_neuron.origin += round_duration
-
-            #plot_helper.plot_behaviour_of_exc_connection(self.wr, self.data_path)
-            plot_helper.plot_behaviour_of_exc_neuron(self.mm_exc, self.data_path, self.params)
-            plot_helper.plot_behaviour_of_inh_neuron(self.mm_inh, self.data_path, self.params)
 
             # Save ee connections after two minutes
             file_name = f"ee_connections_{two_min_unit}.npy"
@@ -307,7 +288,6 @@ class Model:
                 plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
 
                 # # TODO: Save sprectrum 
-
 
     def simulate_random_dynamics(self, sim_time, normalization_time, initial_weight_inputs):
         # TODO save connections, spike rasters and spectra every 2 minutes
@@ -346,6 +326,30 @@ class Model:
         assert (self.random_dynamics_ex.origin + sim_time) == nest.biological_time
         assert (self.random_dynamics_ix.origin + sim_time) == nest.biological_time
 
+    def record_behaviour_of_exc_connection(self): # TODO: only for 1 round 
+        conn = nest.GetConnections(source=self.exc_neurons[31 - 1], target=self.exc_neurons[30:60], synapse_model='clopath_synapse')[2]
+        print(f"{conn.target=}")
+        sourceid = conn.source
+        targetid = conn.target
+        self.wr = nest.Create('weight_recorder')
+        syn_dict_ee = self.params['syn_dict_ee'].copy()
+        syn_dict_ee['weight_recorder'] = self.wr
+        del(syn_dict_ee['synapse_model'])
+        nest.CopyModel('clopath_synapse', 'clopath_synapse_wr', syn_dict_ee)
+
+        nest.Disconnect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse'})
+        nest.Connect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse_wr'}) # TODO: Will be ignored in save_connections
+
+    def record_behaviour_of_inh_neuron(self, neuronid = None): #TODO: make record duration more general
+         if neuronid is not None:
+            self.mm_inh = nest.Create('multimeter', params={'record_from': ['g_ex__X__spikeExc', 'g_in__X__spikeInh', 'V_m'], 'interval': 0.1, 'stop': 120.0})
+            nest.Connect(self.mm_inh, self.inh_neurons[neuronid - 1])
+
+    def record_behaviour_of_exc_neuron(self, neuronid = None): #TODO: make record duration more general
+         if neuronid is not None:
+            self.mm_exc = nest.Create('multimeter', params={'record_from': ['g_ex', 'g_in', 'u_bar_bar', 'u_bar_minus', 'u_bar_plus', 'V_m', 'V_th', 'w'], 'interval': 0.1, 'stop': 120.0})
+            nest.Connect(self.mm_exc, self.exc_neurons[neuronid - 1])
+
     def record_exc_spike_behaviour(self, sim_time, normalization_time, initial_weight_inputs):
 
         # TEST
@@ -366,6 +370,8 @@ class Model:
         sr_senders_exh = self.spike_recorder_exc.events['senders']
 
         self.spike_recorder_exc.n_events = 0 # reset the spike counts
+
+        print(nest.GetStatus(self.spike_recorder_exc))
 
         #conn_ee_weights_between, conn_ei_weights_between = self.get_plastic_connections()
         #self.simulate_random_dynamics(sim_time, normalization_time, initial_weight_inputs)
@@ -394,7 +400,6 @@ class Model:
         #assert (self.spike_recorder_exc.origin + sim_time) == nest.biological_time
 
         return sr_times_exh, sr_senders_exh
-
 
     def __create_RNN_populations(self):
         """Create RNN neuronal populations consisting of excitatory and inhibitory neurons.
@@ -427,8 +432,7 @@ class Model:
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
             self.external_node_to_exc_neuron_dict[stimulation_step] = external_input_per_step_list
         self.external_node_to_inh_neuron = nest.Create('poisson_generator', params=dict(start=0.0, stop=self.num_exc_clusters*(cluster_stimulation_time+stimulation_gap), rate=self.params['exh_rate_ix']))
-        
-        
+
     def __create_recording_devices(self):
         """Create recording devices
         """
@@ -443,13 +447,14 @@ class Model:
         # Create spike recorder for spike generator
         self.spike_recorder_generator = nest.Create('spike_recorder', params={'record_to': 'ascii', 'label': 'generator_spikes'})
 
-    # TODO: change function to __create_plasticity_connections() and connect E to E and I to E 
+    # TODO: change function to __create_plastic_connections() and connect E to E and I to E 
     def __connect_excitatory_neurons(self):
         """Connect excitatory neurons
         """
         # EE connections
         nest.Connect(self.exc_neurons, self.exc_neurons, conn_spec=self.params['conn_dict_ee'], syn_spec=self.params['syn_dict_ee'])
 
+    # TODO: change function to __create_static_connections() and connect I to I and E to I
     def __connect_RNN_neurons(self):
         """Create II, EI, IE connections
         """
@@ -654,8 +659,6 @@ class Model:
             assert np.allclose(initial_weight_sums_dict[neuron.global_id], sum(abs(np.array(conn.weight))))
         return initial_weight_sums_dict
 
-    
-
     # This function was implemented based on the text in Maes et al. (2020) but does not correspond to the code in Julia
     def __create_spike_generators_old(self):
         """Create spike generators. In total, there are three types of poisson generators. The first excites neuron clusters sequentially, 
@@ -753,7 +756,6 @@ class Model:
         else:
             connections.set({'Wmin': connections.weight})
 
-    
     def __stimulus_preference(self, fname='characters_to_subpopulations'):
         """Assign a subset of subpopulations to a each element in the vocabulary.
 
