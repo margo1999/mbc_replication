@@ -95,21 +95,23 @@ def plot_diff_weight_matrix(ax=None, connections_new=None, connections_old=None,
     weight_matrix_old = matrix_from_connections(connections_old)
     weight_matrix = weight_matrix_new - weight_matrix_old
 
-    inhibitory_plasticity = False
-    excitatory_plasticity = True
+    # Plots inh and/or exc pool-matrices for better debugging 
+    inhibitory_plasticity = False # TODO make this general
+    excitatory_plasticity = True # TODO make this general
     
-    # TODO make this general
     if excitatory_plasticity:
-        cluster_max_change = np.zeros((8,8))
-        cluster_min_change = np.zeros((8,8))
-        cluster_mean_change = np.zeros((8,8))
-        for j in range(8):
-            j_start = j * 30
-            j_stop = j_start + 30 
+        poollayers = (8,8) # TODO make this general
+        poolsize = (30, 30) # TODO make this general
+        cluster_max_change = np.zeros(poollayers)
+        cluster_min_change = np.zeros(poollayers)
+        cluster_mean_change = np.zeros(poollayers)
+        for j in range(poollayers[0]):
+            j_start = j * poolsize[0]
+            j_stop = j_start + poolsize[0] 
 
-            for k in range(8):
-                k_start = k * 30 
-                k_stop = k_start + 30
+            for k in range(poollayers[0]):
+                k_start = k * poolsize[0] 
+                k_stop = k_start + poolsize[0]
 
                 cluster_max_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].max()
                 cluster_min_change[j, k] = weight_matrix[j_start:j_stop, k_start:k_stop].min()
