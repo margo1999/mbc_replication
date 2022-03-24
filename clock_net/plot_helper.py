@@ -100,7 +100,7 @@ def plot_diff_weight_matrix(ax=None, connections_new=None, connections_old=None,
     excitatory_plasticity = True # TODO make this general
     
     if excitatory_plasticity:
-        poollayers = (8,8) # TODO make this general
+        poollayers = (80,80) # TODO make this general
         poolsize = (30, 30) # TODO make this general
         cluster_max_change = np.zeros(poollayers)
         cluster_min_change = np.zeros(poollayers)

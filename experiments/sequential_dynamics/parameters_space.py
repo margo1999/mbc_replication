@@ -2,7 +2,7 @@ import parameters as para
 import numpy as np
 
 RESOLUTION = 0.1
-TEST_NETWORK = True # Test network has fewer nodes than the orginal network, therefore it makes it faster to simulate and easier to debug
+TEST_NETWORK = False # Test network has fewer nodes than the orginal network, therefore it makes it faster to simulate and easier to debug
 SEED = 1
 
 np.random.seed(SEED)
