@@ -78,7 +78,9 @@ def generate_reference_data():
     # store connections before learning
     if params['store_connections']:
         model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections_before')
-        model_instance.save_connections(synapse_model=params['syn_dict_ei']['synapse_model'], fname='ei_connections_before')
+        if params['syn_dict_ei']['synapse_model'] != 'static_synapse':
+            model_instance.save_connections(synapse_model=params['syn_dict_ei']['synapse_model'], fname='ei_connections_before') # TODO: better ask for source and target
+        model_instance.save_connections(fname='all_connections_before')    
     time_store_connection_before = time.time()
 
     # ###############################################################
@@ -90,7 +92,9 @@ def generate_reference_data():
     # store connections after learning
     if params['store_connections']:
         model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections')
-        model_instance.save_connections(synapse_model=params['syn_dict_ei']['synapse_model'], fname='ei_connections')
+        if params['syn_dict_ei']['synapse_model'] != 'static_synapse':
+            model_instance.save_connections(synapse_model=params['syn_dict_ei']['synapse_model'], fname='ei_connections') # TODO: better ask for source and target
+        model_instance.save_connections(fname='all_connections')
     time_store_connection_after = time.time()
 
     def print_times(file=sys.stdout):

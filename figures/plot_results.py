@@ -1,5 +1,7 @@
 import figures.plot_spikes as plot_spikes
 import figures.plot_weight_matrix as plot_weight_matrix
+import figures.plot_spectrum as plot_spectrum
+import figures.plot_weight_distribution as plot_weight_distribution
 
 import matplotlib.pyplot as plt
 from pickle import dump
@@ -24,7 +26,7 @@ def plot_results(outfilename=None):
             dump(figure, open(outfilename, "wb"))
             figure.savefig(outfilename + '.png')
         
-def plot_2_mins_results(spikefilename, connectionsfilename, outfilename=None):
+def plot_2_mins_results(spikefilename, connectionsfilename, allconnectionsfilename, params=None, outfilename=None):
      with plt.rc_context({
 
             # plot settings 
@@ -34,9 +36,11 @@ def plot_2_mins_results(spikefilename, connectionsfilename, outfilename=None):
             'font.family': 'sans-serif',
             'text.usetex': False
             }):
-        figure, axes = plt.subplots(1,2)
-        plot_spikes.plot_2_mins_spikes(axes[0], spikefilename)
-        plot_weight_matrix.plot_2_mins_weight_matrix(axes[1], connectionsfilename)
+        figure, axes = plt.subplots(2,2)
+        plot_spikes.plot_2_mins_spikes(axes[0,0], spikefilename)
+        plot_weight_matrix.plot_2_mins_weight_matrix(axes[0,1], connectionsfilename)
+        plot_spectrum.plot_2_mins_spectrum(axes[1,0], allconnectionsfilename)
+        plot_weight_distribution.plot_2_mins_weight_distribution(axes[1,1], params=params, filename=allconnectionsfilename)
         figure.tight_layout()
 
         if outfilename:

@@ -57,6 +57,35 @@ def plot_spikes(
         ax.set_xlabel('time [ms]')
         ax.set_ylabel('neuron [id]')
 
+def plot_spectrum(ax=None, connections=None, title='spectrum'):
+    if ax is None:
+        ax = plt.gca()
+    
+    if connections is not None:
+        weight_matrix = matrix_from_connections(connections)
+        eigenvals = np.linalg.eigvals(weight_matrix.T)
+
+        ax.set_title(title, fontsize='xx-large')
+        ax.set_xlabel('Real Axis')
+        ax.set_ylabel('Imaginary Axis')
+        #ax.plot(np.real(eigenvals), np.imag(eigenvals), ls="", marker='.', ms=1)
+        ax.scatter(np.real(eigenvals), np.imag(eigenvals),marker="o",linewidths=0)
+
+def plot_weight_distribution(ax=None, connections=None, params=None, title='weight distribution'):
+    if ax is None:
+        ax = plt.gca()
+    
+    if connections is not None and params is not None:
+        weight_list = []
+        for post, pre, weight in connections:
+            if post <= params['num_exc_neurons'] and weight != 0:
+                weight_list.append(weight)
+
+        ax.set_title(title, fontsize='xx-large')
+        ax.set_xlabel('weights')
+        plt.hist(weight_list, bins=100)
+
+
 def plot_weight_matrix(ax=None, connections=None, title=''):
     """[summary]
 

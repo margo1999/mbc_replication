@@ -31,7 +31,7 @@ else:
 V_m_exc = np.random.uniform(low=-60.0, high=-52, size=240) # TODO make this generalized and add to dictionary
 p['exhibit_model'] = 'aeif_cond_diff_exp_clopath'
 p['exhibit_params'] = {'A_LTD': 0.00014,        # LTD amplitude (pa/mV)
-                    'A_LTP': 0.0018,            # LTP amplitude (pa/mV^2)
+                    'A_LTP': 0.0008,            # LTP amplitude (pa/mV^2)
                     'C_m': 300.0,               # Capacitance of the membrane (pF)
                     'V_reset': -60.0,           # Reset potential (for all neurons the same) (mV)
                     'V_peak': 20.0,             # Spike detection threshold (mV)

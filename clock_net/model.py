@@ -187,7 +187,7 @@ class Model:
 
         # Rank() returns the MPI rank of the local process TODO: simulating time not correct
         if nest.Rank() == 0:
-            print('\nSimulating {} ms.'.format(round_duration))
+            print('\nSimulating {} hour.'.format(1))
 
         self.train_RNN(round_duration, normalization_time, initial_weight_inputs_dict)
 
@@ -200,19 +200,24 @@ class Model:
                 file_name = f"ee_connections_{30+i}.npy"
                 self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
                 connectionsfilepath = os.path.join(self.data_path, file_name)
+
+                file_name = f"all_connections_{30+i}.npy"
+                self.save_connections(fname=file_name)
+                allconnectionsfilepath = os.path.join(self.data_path, file_name)
+
                 spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
                 spikefilepath = os.path.join(self.data_path, f"spikes_{30 + i}.pickle")
                 dump(spikes, open(spikefilepath, "wb"))
 
                 # Plot and save plot of connection and spike behaviour as png and pickle file
                 plotsfilepath = os.path.join(self.data_path, f"plots_{30 + i}")
-                plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
+                plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
 
 # TODO: rename to simulate_sequential dynamics?
     def train_RNN(self, round_duration, normalization_time, initial_weight_inputs_dict):
   
         training_iterations = self.params['training_iterations']
-        rounds = (-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration # TODO: int(np.ceil(2*60*1000/120))
+        rounds = 1#(-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration # TODO: int(np.ceil(2*60*1000/120))
         for two_min_unit in tqdm(range(training_iterations)): 
 
             for round_ in tqdm(range(rounds)):
@@ -230,7 +235,7 @@ class Model:
                     nest.Run(normalization_time)
                 
                     # TODO: Is normalization really necessary every 20 ms. Creates large overhead.
-                    #self.normalize_weights('clopath_synapse', initial_weight_inputs_dict)
+                    #self.normalize_weights(self.exc_neurons, initial_weight_inputs_dict)
 
                 nest.Cleanup()
 
@@ -273,21 +278,22 @@ class Model:
             file_name = f"ee_connections_{two_min_unit}.npy"
             self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
             connectionsfilepath = os.path.join(self.data_path, file_name)
-            
+
+            # Save all connections to plot spectrum
+            file_name = f"all_connections_{two_min_unit}.npy"
+            self.save_connections(fname=file_name)
+            allconnectionsfilepath = os.path.join(self.data_path, file_name)
+
             if True:
                 # Save current spike behaviour under random input dynamics
                 sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
-                # print(f"{len(sr_times_exh)=}", f"{sr_times_exh[0]=}", f"{sr_times_exh[-1]=}")
                 spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
-                # print(f"{len(spikes)=}", f"{len(spikes['sr_times_exh'])=}")
                 spikefilepath = os.path.join(self.data_path, f"spikes_{two_min_unit}.pickle")
                 dump(spikes, open(spikefilepath, "wb"))
 
-                # Plot and save plot of connection and spike behaviour as png and pickle file
+                # Plot and save plot of excitatory connections, spike behaviour and spectrum as png and pickle file
                 plotsfilepath = os.path.join(self.data_path, f"plots_{two_min_unit}")
-                plot_2_mins_results(spikefilepath, connectionsfilepath, plotsfilepath)
-
-                # # TODO: Save sprectrum 
+                plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
 
     def simulate_random_dynamics(self, sim_time, normalization_time, initial_weight_inputs):
         # TODO save connections, spike rasters and spectra every 2 minutes
@@ -311,7 +317,7 @@ class Model:
 
         for i in range(simulate_steps):
             nest.Run(normalization_time)
-            #self.normalize_weights(self.exc_neurons, initial_weight_inputs=initial_weight_inputs)
+            #self.normalize_weights(self.exc_neurons, initial_weight_inputs)
         
         if sim_time % normalization_time != 0:
             remaining_time = sim_time - normalization_time * simulate_steps
@@ -541,21 +547,21 @@ class Model:
         conn_ei.eta = self.params['syn_dict_ei']['eta']
     
     def get_plastic_connections(self):
-        conn_ee = nest.GetConnections(synapse_model= self.params['syn_dict_ee']['synapse_model'])
-        conn_ei = nest.GetConnections(synapse_model= self.params['syn_dict_ei']['synapse_model'])
+        conn_ee = nest.GetConnections(source=self.exc_neurons, target=self.exc_neurons, synapse_model= self.params['syn_dict_ee']['synapse_model'])
+        conn_ei = nest.GetConnections(source=self.inh_neurons, target=self.exc_neurons, synapse_model= self.params['syn_dict_ei']['synapse_model'])
         conn_ee_weights = conn_ee.weight
         conn_ei_weights = conn_ei.weight
 
         return conn_ee_weights, conn_ei_weights
 
     def set_plastic_connections(self, conn_ee_weights, conn_ei_weights):
-        conn_ee = nest.GetConnections(synapse_model= self.params['syn_dict_ee']['synapse_model'])
-        conn_ei = nest.GetConnections(synapse_model= self.params['syn_dict_ei']['synapse_model'])
+        conn_ee = nest.GetConnections(source=self.exc_neurons, target=self.exc_neurons, synapse_model= self.params['syn_dict_ee']['synapse_model'])
+        conn_ei = nest.GetConnections(source=self.inh_neurons, target=self.exc_neurons, synapse_model= self.params['syn_dict_ei']['synapse_model'])
         conn_ee.weight = conn_ee_weights
         conn_ei.weight = conn_ei_weights
 
     # TODO: maybe change fname default name to a more common one
-    def save_connections(self, synapse_model=None, fname='ee_connections'):
+    def save_connections(self, synapse_model=None, fname='no_label'):
         """Save connection matrix
 
         Parameters
@@ -567,9 +573,12 @@ class Model:
         """
 
         print('\nSave connections ...')
-        assert synapse_model is not None, "Need parameter synapse_model!"
+        if synapse_model is None: 
+            RNN_neurons = self.exc_neurons + self.inh_neurons
+            connections_all = nest.GetConnections(source=RNN_neurons, target=RNN_neurons)
+        else:
+            connections_all = nest.GetConnections(synapse_model=synapse_model)
 
-        connections_all = nest.GetConnections(synapse_model=synapse_model)
         connections = nest.GetStatus(connections_all, ['target', 'source', 'weight'])
 
         np.save('%s/%s' % (self.data_path, fname), connections)
