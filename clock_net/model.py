@@ -217,7 +217,7 @@ class Model:
     def train_RNN(self, round_duration, normalization_time, initial_weight_inputs_dict):
   
         training_iterations = self.params['training_iterations']
-        rounds = 1#(-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration # TODO: int(np.ceil(2*60*1000/120))
+        rounds = (-(-(2*60*1000) // int(round_duration))) # 2 min / round_duration # TODO: int(np.ceil(2*60*1000/120))
         for two_min_unit in tqdm(range(training_iterations)): 
 
             for round_ in tqdm(range(rounds)):
