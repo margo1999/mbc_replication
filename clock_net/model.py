@@ -283,17 +283,16 @@ class Model:
             file_name = f"all_connections_{two_min_unit}.npy"
             self.save_connections(fname=file_name)
             allconnectionsfilepath = os.path.join(self.data_path, file_name)
+            
+            # Save current spike behaviour under random input dynamics
+            sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
+            spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
+            spikefilepath = os.path.join(self.data_path, f"spikes_{two_min_unit}.pickle")
+            dump(spikes, open(spikefilepath, "wb"))
 
-            if True:
-                # Save current spike behaviour under random input dynamics
-                sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
-                spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
-                spikefilepath = os.path.join(self.data_path, f"spikes_{two_min_unit}.pickle")
-                dump(spikes, open(spikefilepath, "wb"))
-
-                # Plot and save plot of excitatory connections, spike behaviour and spectrum as png and pickle file
-                plotsfilepath = os.path.join(self.data_path, f"plots_{two_min_unit}")
-                plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
+            # Plot and save plot of excitatory connections, spike behaviour and spectrum as png and pickle file
+            plotsfilepath = os.path.join(self.data_path, f"plots_{two_min_unit}")
+            plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
 
     def simulate_random_dynamics(self, sim_time, normalization_time, initial_weight_inputs):
         # TODO save connections, spike rasters and spectra every 2 minutes
@@ -432,7 +431,7 @@ class Model:
     
         for stimulation_step in range(self.num_exc_clusters):
             external_input_per_step_list = []
-            start = stimulation_step * (cluster_stimulation_time + stimulation_gap)
+            start = stimulation_step * (cluster_stimulation_time + stimulation_gap) + 1
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ex'])))
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start+cluster_stimulation_time, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
