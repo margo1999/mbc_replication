@@ -263,6 +263,7 @@ class Model:
                         generators_to_exc[0].origin += round_duration + 3000.0
                         generators_to_exc[1].origin += round_duration + 3000.0
                         generators_to_exc[2].origin += round_duration + 3000.0
+                        generators_to_exc[3].origin += round_duration + 3000.0
                     
                     self.external_node_to_inh_neuron.origin += round_duration + 3000.0
 
@@ -271,6 +272,7 @@ class Model:
                         generators_to_exc[0].origin += round_duration
                         generators_to_exc[1].origin += round_duration
                         generators_to_exc[2].origin += round_duration
+                        generators_to_exc[3].origin += round_duration
                     
                     self.external_node_to_inh_neuron.origin += round_duration
 
@@ -431,8 +433,9 @@ class Model:
     
         for stimulation_step in range(self.num_exc_clusters):
             external_input_per_step_list = []
-            start = stimulation_step * (cluster_stimulation_time + stimulation_gap) + 1
-            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ex'])))
+            start = stimulation_step * (cluster_stimulation_time + stimulation_gap)
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+1, rate=self.params['inh_rate_ex']))) 
+            external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start + 1, stop=start+cluster_stimulation_time, rate=self.params['exh_rate_ex'])))
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start+cluster_stimulation_time, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
             external_input_per_step_list.append(nest.Create('poisson_generator', params=dict(start=start, stop=start+cluster_stimulation_time+stimulation_gap, rate=self.params['inh_rate_ex'])))
             self.external_node_to_exc_neuron_dict[stimulation_step] = external_input_per_step_list
@@ -482,9 +485,11 @@ class Model:
         for cluster_index, external_nodes in self.external_node_to_exc_neuron_dict.items():
             first_neuron = cluster_index * exc_cluster_size
             last_neuron = (first_neuron + exc_cluster_size) - 1
-            external_node_exc = external_nodes[0]
-            external_node_inh_gap = external_nodes[1]
-            external_node_inh = external_nodes[2]
+            external_node_first_inh_gap = external_nodes[0]
+            external_node_exc = external_nodes[1]
+            external_node_inh_gap = external_nodes[2]
+            external_node_inh = external_nodes[3]
+            nest.Connect(external_node_first_inh_gap, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])
             nest.Connect(external_node_exc, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_exc'], syn_spec=self.params['syn_dict_ex_exc'])
             nest.Connect(external_node_inh_gap, self.exc_neurons[first_neuron:(last_neuron+1)], conn_spec=self.params['conn_dict_ex_inh'], syn_spec=self.params['syn_dict_ex_inh'])
             if first_neuron > 0:
@@ -509,6 +514,7 @@ class Model:
             nest.Connect(self.external_node_to_exc_neuron_dict[i][0], self.spike_recorder_generator)
             nest.Connect(self.external_node_to_exc_neuron_dict[i][1], self.spike_recorder_generator)
             nest.Connect(self.external_node_to_exc_neuron_dict[i][2], self.spike_recorder_generator)
+            nest.Connect(self.external_node_to_exc_neuron_dict[i][3], self.spike_recorder_generator)
         nest.Connect(self.external_node_to_inh_neuron, self.spike_recorder_generator)
 
     def create_spontaneous_dynamics_nodes(self):
