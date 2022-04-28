@@ -20,6 +20,11 @@ with open('../config.yaml', 'r') as cfgfile:
     email = params_config['email']
     path = params_config['path']
 
+logpath = os.path.join(path, 'log')
+if not os.path.exists(logpath):
+    os.makedirs(logpath)
+    print("Created", logpath)
+
 PS = pars.p
 
 PL=helper.parameter_set_list(PS)
@@ -45,15 +50,16 @@ for batch_id in range(int(np.ceil(1.*N/JOBMAX))):
     file.write('#!/bin/bash\n')
     file.write('#SBATCH --job-name ' + params['data_path']['parameterspace_label'] + '\n')    # set the name of the job
     file.write('#SBATCH --array 0-%d\n' % (batch_size-1))                                     # launch an array of jobs
-    file.write('#SBATCH --time 01:00:00\n')                                                   # specify a time limit
+    file.write('#SBATCH --time 15:00:00\n')                                                   # specify a time limit
     file.write('#SBATCH --ntasks 1\n')
     file.write('#SBATCH --cpus-per-task %d\n' % params['n_threads'])
     file.write('#SBATCH -o %s' % path + '/log/job_%A_%a.o\n')               # redirect stderr and stdout to the same file
     file.write('#SBATCH -e %s' % path + '/log/job_%A_%a.e\n')               # redirect stderr and stdout to the same file
     file.write('#SBATCH --mail-type=BEGIN,END,FAIL,REQUEUE\n')              # send email notifications
     file.write('#SBATCH --mail-user=%s\n' % email)
-    file.write('source activate spiking-htm\n')                             # activate conda environment
-    file.write('#SBATCH --mem=6000\n')                                      # and reserve 6GB of memory
+    file.write('#SBATCH --partition=blaustein,hambach\n')
+    #file.write('source activate clock_network\n')                             # activate conda environment
+    file.write('#SBATCH --mem=10000\n')                                      # and reserve 6GB of memory
     file.write('srun python %s %d $SLURM_ARRAY_TASK_ID %d \n' % (simulation_script,batch_id,JOBMAX) ) # call simulation script
     file.write('scontrol show jobid ${SLURM_JOBID} -dd # Job summary at exit')
     file.close()
@@ -62,4 +68,4 @@ for batch_id in range(int(np.ceil(1.*N/JOBMAX))):
     print("submitting %s" % (submission_script))
     os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
     os.system("sbatch ./%s" % submission_script)
-    os.system("rm %s" % submission_script)
+    #os.system("rm %s" % submission_script)
