@@ -225,18 +225,18 @@ class Model:
                 esttime = ((round_ + (rounds * two_min_unit)) * (round_duration)) + two_min_unit * 3000.0
                 curtime = nest.biological_time
                 assert esttime == curtime
-                assert round_duration % normalization_time == 0
 
                 simulate_steps = int(round_duration // normalization_time)
 
                 nest.Prepare()
-                for twenty_ms_unit in range(simulate_steps):
-
+                for normalization_unit in range(simulate_steps):
                     nest.Run(normalization_time)
-                
-                    # TODO: Is normalization really necessary every 20 ms. Creates large overhead.
-                    #self.normalize_weights(self.exc_neurons, initial_weight_inputs_dict)
+                    self.normalize_weights(self.exc_neurons, initial_weight_inputs_dict)
 
+                if round_duration % normalization_time != 0:
+                    remaining_time = round_duration - normalization_time * simulate_steps
+                    nest.Run(remaining_time)
+                    assert remaining_time < normalization_time
                 nest.Cleanup()
 
                 # print(f"{nest.GetStatus(self.spike_recorder_exc)=}")
@@ -309,16 +309,13 @@ class Model:
             self.random_dynamics_ex.start = 0.0
             self.random_dynamics_ix.start = 0.0
 
-
-        # TODO: Set stdp delay
-
         simulate_steps = int(sim_time // normalization_time)
 
         nest.Prepare()
 
         for i in range(simulate_steps):
             nest.Run(normalization_time)
-            #self.normalize_weights(self.exc_neurons, initial_weight_inputs)
+            self.normalize_weights(self.exc_neurons, initial_weight_inputs)
         
         if sim_time % normalization_time != 0:
             remaining_time = sim_time - normalization_time * simulate_steps
@@ -326,8 +323,6 @@ class Model:
             assert remaining_time < normalization_time
 
         nest.Cleanup()
-
-        # TODO: Reset stdp delay
 
         # print(f"{self.random_dynamics_ex.stop=}", f"{nest.biological_time=}")
         assert (self.random_dynamics_ex.origin + sim_time) == nest.biological_time

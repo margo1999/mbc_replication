@@ -13,7 +13,7 @@ p = para.ParameterSpace({})
 if(not TEST_NETWORK):
     p['num_exc_neurons'] = 2400                                             # Number of recurrent E neurons
     p['num_inh_neurons'] = 600                                              # Number of recurrent I neurons
-    p['num_exc_clusters'] = 80                                              # Number of exciatatory clusters
+    p['num_exc_clusters'] = 30                                              # Number of exciatatory clusters
     p['exc_cluster_size'] = p['num_exc_neurons'] // p['num_exc_clusters']   # Number of excitatory neurons in one cluster
     p['connection_p'] = 0.2                                                 # Recurrent network connection probability
     print('\nThe orginal size of the network is used!') 
@@ -196,16 +196,16 @@ p['idend_record_time'] = 8.                                                     
 p['evaluate_performance'] = True                                                                    # True: we monitor the dendritic current at a certain time steps during the simulation. This then is used for the prediction performance assessment
 p['evaluate_replay'] = False                                                                        # TODO: What is this?  
 p['store_connections'] = True                                                                       # Stores connection in a seperate file (bool)
-p['load_connections'] = False                                                                       # Loads connection from existing file (bool)
+p['load_connections'] = False                                                                        # Loads connection from existing file (bool)
 #p['sparse_first_char'] = False                                                                     # If turned on, the dAP of a subset of neurons in the subpopulation representing 
                                                                                                     # First sequence elements is activated externally 
 p['cluster_stimulation_time'] = 10.0                                                                # Stimulation time from external input to excitatory cluster (ms)
 p['stimulation_gap'] = 5.0                                                                          # Gap between to stimulations of excitatory clusters (ms) 
 p['round_time'] = p['num_exc_clusters'] * (p['cluster_stimulation_time'] + p['stimulation_gap'])    # Simulation time for one round (ms)
-p['training_iterations'] = 30                                                                        # Indicates how many iterations there are during the training phase. One iteration corresponds to approximately 2 minutes. (int)
-p['normalization_time'] = 20.0                                                                      # Time after normalization is necessary (ms)
-p['random_dynamics'] = True                                                                        # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
-p['random_dynamics_time'] = 1.0 * 60.0 * 60.0 * 1000.0                                             # Time of spontaneous dynamics (ms)
+p['training_iterations'] = 30                                                                       # Indicates how many iterations there are during the training phase. One iteration corresponds to approximately 2 minutes. (int)
+p['normalization_time'] = 450.0                                                                     # Time after normalization is necessary (ms)
+p['random_dynamics'] = True                                                                         # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
+p['random_dynamics_time'] = 1.0 * 60.0 * 60.0 * 1000.0                                              # Time of spontaneous dynamics (ms)
 
 ###################################################### data path dict ######################################################
 
