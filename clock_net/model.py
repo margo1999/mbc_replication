@@ -12,10 +12,12 @@ import os
 from pickle import dump
 import random
 import nest
+import nest.ll_api
 import copy
 import numpy as np
 from collections import defaultdict
 import sys
+import time
 from tqdm import tqdm
 from nest import voltage_trace
 import matplotlib.pyplot as plt
@@ -153,10 +155,7 @@ class Model:
         print('\nConnecting network and devices...')
 
         # Connect excitatory population (EE) TODO: also EI connections are plastic
-        if self.params['load_connections']:
-            self.__load_connections(label='ee_connections')
-        else:
-            self.__connect_excitatory_neurons()
+        self.__connect_excitatory_neurons()
 
         # Connect inhibitory population (II, EI, IE)
         self.__connect_RNN_neurons()
@@ -179,39 +178,70 @@ class Model:
     def simulate(self):
         """Run simulation by stopping after each round to reset the times of the spike generators.
         """
+        test_normalization = False
+        opt = False
+        if test_normalization:
+            print("Normalization")
 
-        round_duration = self.params['round_time']
-        random_dynamics_time = self.params['random_dynamics_time']
-        normalization_time = self.params['normalization_time']
-        initial_weight_inputs_dict = self.get_initial_weight_sums_dict(neurons=self.exc_neurons, synapse_type='clopath_synapse')
+            print(" Create Dict")
+            # Takes 20-25 seconds (+ saving of source and target ~30s) compared to get_initial_weight_sums_dict_opt where computation takes 70-80 seconds
+            start = time.perf_counter()
+            initial_weight_inputs_dict = self.get_initial_weight_sums_dict_opt(neurons=self.exc_neurons, synapse_type='clopath_synapse')
+            stop = time.perf_counter()
+            print(f"{stop-start=}")
 
-        # Rank() returns the MPI rank of the local process TODO: simulating time not correct
-        if nest.Rank() == 0:
-            print('\nSimulating {} hour.'.format(1))
 
-        self.train_RNN(round_duration, normalization_time, initial_weight_inputs_dict)
+            if opt:
+                self.save_connections(synapse_model='clopath_synapse', fname='opt_normalization_before')
+                nest.Simulate(450.0)
+                print("Start Counter")
+                start = time.perf_counter()
+                self.normalize_weights_opt(self.exc_neurons, initial_weight_inputs_dict)
+                stop = time.perf_counter()
+                print(f"{stop-start=}")
+                self.save_connections(synapse_model='clopath_synapse', fname='opt_normalization_after')
+            else:
+                self.save_connections(synapse_model='clopath_synapse', fname='normalization_before')
+                nest.Simulate(450.0)
+                print("Start Counter")
+                start = time.perf_counter()
+                self.normalize_weights(self.exc_neurons, initial_weight_inputs_dict)
+                stop = time.perf_counter()
+                print(f"{stop-start=}")
+                self.save_connections(synapse_model='clopath_synapse', fname='normalization_after')
+        else:
+            round_duration = self.params['round_time']
+            random_dynamics_time = self.params['random_dynamics_time']
+            normalization_time = self.params['normalization_time']
+            initial_weight_inputs_dict = self.get_initial_weight_sums_dict_opt(neurons=self.exc_neurons, synapse_type='clopath_synapse')
 
-        if self.params['random_dynamics']:
-            iterations = int(np.ceil(random_dynamics_time / 120000.0))
-            for i in range(iterations):
-                self.simulate_random_dynamics(120000.0, normalization_time, initial_weight_inputs_dict)
-                sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
-                
-                file_name = f"ee_connections_{30+i}.npy"
-                self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
-                connectionsfilepath = os.path.join(self.data_path, file_name)
+            # Rank() returns the MPI rank of the local process TODO: simulating time not correct
+            if nest.Rank() == 0:
+                print('\nSimulating {} hour.'.format(1))
 
-                file_name = f"all_connections_{30+i}.npy"
-                self.save_connections(fname=file_name)
-                allconnectionsfilepath = os.path.join(self.data_path, file_name)
+            self.train_RNN(round_duration, normalization_time, initial_weight_inputs_dict)
 
-                spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
-                spikefilepath = os.path.join(self.data_path, f"spikes_{30 + i}.pickle")
-                dump(spikes, open(spikefilepath, "wb"))
+            if self.params['random_dynamics']:
+                iterations = int(np.ceil(random_dynamics_time / 120000.0))
+                for i in range(iterations):
+                    self.simulate_random_dynamics(120000.0, normalization_time, initial_weight_inputs_dict)
+                    sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
+                    
+                    file_name = f"ee_connections_{30+i}.npy"
+                    self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
+                    connectionsfilepath = os.path.join(self.data_path, file_name)
 
-                # Plot and save plot of connection and spike behaviour as png and pickle file
-                plotsfilepath = os.path.join(self.data_path, f"plots_{30 + i}")
-                plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
+                    file_name = f"all_connections_{30+i}.npy"
+                    self.save_connections(fname=file_name)
+                    allconnectionsfilepath = os.path.join(self.data_path, file_name)
+
+                    spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
+                    spikefilepath = os.path.join(self.data_path, f"spikes_{30 + i}.pickle")
+                    dump(spikes, open(spikefilepath, "wb"))
+
+                    # Plot and save plot of connection and spike behaviour as png and pickle file
+                    plotsfilepath = os.path.join(self.data_path, f"plots_{30 + i}")
+                    plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
 
 # TODO: rename to simulate_sequential dynamics?
     def train_RNN(self, round_duration, normalization_time, initial_weight_inputs_dict):
@@ -231,7 +261,7 @@ class Model:
                 nest.Prepare()
                 for normalization_unit in range(simulate_steps):
                     nest.Run(normalization_time)
-                    self.normalize_weights(self.exc_neurons, initial_weight_inputs_dict)
+                    self.normalize_weights_opt(self.exc_neurons, initial_weight_inputs_dict)
 
                 if round_duration % normalization_time != 0:
                     remaining_time = round_duration - normalization_time * simulate_steps
@@ -315,7 +345,7 @@ class Model:
 
         for i in range(simulate_steps):
             nest.Run(normalization_time)
-            self.normalize_weights(self.exc_neurons, initial_weight_inputs)
+            self.normalize_weights_opt(self.exc_neurons, initial_weight_inputs)
         
         if sim_time % normalization_time != 0:
             remaining_time = sim_time - normalization_time * simulate_steps
@@ -583,7 +613,7 @@ class Model:
 
         np.save('%s/%s' % (self.data_path, fname), connections)
 
-    def __load_connections(self, label='ee_connections'):
+    def __load_connections(self, label='all_connections', static=True):
         """Load connection matrix
         
         Parameters
@@ -591,9 +621,6 @@ class Model:
         label: str
             name of the stored file
         """
-
-        assert self.params['syn_dict_ee']['synapse_model'] != 'stdsp_synapse_rec', "synapse model not tested yet"
-
         print('\nLoad connections ...')
         data_path = helper.get_data_path(self.params['data_path'], self.params['label'])
         conns = np.load('%s/%s.npy' % (data_path, label))
@@ -601,33 +628,11 @@ class Model:
         conns_src = [int(conn[1]) for conn in conns]
         conns_weights = [conn[2] for conn in conns]
 
-        if self.params['evaluate_replay']:
-            syn_dict = {'receptor_type': 2,
-                        'delay': [self.params['syn_dict_ee']['delay']] * len(conns_weights),
+        if static:
+            syn_dict = {'synapse_model': 'static_synapse',
+                        'delay': [self.params['dt']] * len(conns_weights),
                         'weight': conns_weights}
-            nest.Connect(conns_src, conns_tg, 'one_to_one', syn_dict)
-        else:
-            # TODO: clean up!
-            syn_dict_ee = copy.deepcopy(self.params['syn_dict_ee'])
-
-            del syn_dict_ee['synapse_model']
-            del syn_dict_ee['weight']
-            del syn_dict_ee['receptor_type']
-            if self.params['syn_dict_ee']['synapse_model'] == 'stdsp_synapse':
-                del syn_dict_ee['permanence']
-
-            nest.SetDefaults('stdsp_synapse', syn_dict_ee)
-
-            if self.params['syn_dict_ee']['synapse_model'] == 'stdsp_synapse':
-                syn_dict = {'synapse_model': 'stdsp_synapse',
-                            'receptor_type': 2,
-                            'weight': conns_weights}
-            else:
-                syn_dict = {'synapse_model': 'stdsp_synapse',
-                            'receptor_type': 2,
-                            'weight': conns_weights}
-
-            nest.Connect(conns_src, conns_tg, 'one_to_one', syn_dict)
+        nest.Connect(conns_src, conns_tg, 'one_to_one', syn_dict)
         
     # This function is different to the one in Julia but based on the text in the Maes et al. (2020) paper, we could assume that this is the function we need
     # TODO: Test later if it makes any difference if we use this function or normalize_weights()
@@ -658,6 +663,60 @@ class Model:
             # assert np.prod(np.array(conn.weight) <= Wmax)
             # assert np.prod(np.array(conn.weight) >= Wmin)
 
+    def normalize_weights_opt(self, neurons_to_be_normalized, initial_weight_inputs_dict):
+        # print("Get Connections")
+        # start = time.perf_counter()
+        conns = nest.GetConnections(target=neurons_to_be_normalized, synapse_model="clopath_synapse")
+        # stop = time.perf_counter()
+        # print(f"{stop-start=}")
+
+        # print("Get Status")
+        # start = time.perf_counter()
+        mod_conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
+        # stop = time.perf_counter()
+        # print(f"{stop-start=}")
+
+        # print("create weight matrix")
+        # start = time.perf_counter()
+        weight_matrix = plot_helper.matrix_from_connections(mod_conns)
+        # stop = time.perf_counter()
+        # print(f"{stop-start=}")
+        
+        # print("apply normalization")
+        # start = time.perf_counter()
+        for target_idx, row in enumerate(weight_matrix):
+            row[:] = self.apply_hard_L1(target_idx, row, initial_weight_inputs_dict)
+        # stop = time.perf_counter()
+        # print(f"{stop-start=}")
+
+        # print("Source & Targets")
+        # start = time.perf_counter()
+        sources = self.sources
+        targets = self.targets
+        # stop = time.perf_counter()
+        # print(f"{stop-start=}")
+        if True:
+            # print("set normalized weights")
+            # start = time.perf_counter()
+            conns.weight = weight_matrix[np.array(targets) - 1, np.array(sources) - 1]
+            # stop = time.perf_counter()
+            # print(f"{stop-start=}")
+        else:
+
+            print("ll_api")
+            start = time.perf_counter()
+            nest.ll_api.connect_arrays(sources, targets, weight_matrix[targets - 1, sources - 1], None, "clopath_synapse", None, None)
+            stop = time.perf_counter()
+            print(f"{stop-start=}")
+
+    def apply_hard_L1(self, target_idx, weight_row, initial_weight_inputs_dict):
+        target_neuron = self.exc_neurons[target_idx]
+        Wmin, Wmax = self.params['syn_dict_ee']['Wmin'], self.params['syn_dict_ee']['Wmax']
+        nonzero_entries = np.count_nonzero(weight_row)
+        new_weights = weight_row - (sum(abs(weight_row)) - initial_weight_inputs_dict[target_neuron.global_id]) / nonzero_entries
+        np.clip(new_weights, Wmin, Wmax, out=new_weights)
+        return new_weights
+
     def get_initial_weight_sums_dict(self, neurons, synapse_type=None):
         initial_weight_sums_dict = {}
         for neuron in neurons:
@@ -666,6 +725,19 @@ class Model:
             initial_weight_sums_dict[neuron.global_id] = num_connections * self.params['syn_dict_ee']['weight']
             # This test only gives correct result if the function is called before any weight changes TODO: remove later
             assert np.allclose(initial_weight_sums_dict[neuron.global_id], sum(abs(np.array(conn.weight))))
+        return initial_weight_sums_dict
+
+    def get_initial_weight_sums_dict_opt(self, neurons, synapse_type=None):
+        conns = nest.GetConnections(target=neurons, synapse_model=synapse_type)
+        mod_conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
+        self.sources = np.array(conns.source)
+        self.targets = np.array(conns.target)
+        weight_matrix = plot_helper.matrix_from_connections(mod_conns)
+        initial_weight_sums_dict = {}
+
+        for i, row in enumerate(weight_matrix):
+            initial_weight_sums_dict[neurons[i].global_id] = row.sum()
+
         return initial_weight_sums_dict
 
     # This function was implemented based on the text in Maes et al. (2020) but does not correspond to the code in Julia
