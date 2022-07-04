@@ -1,9 +1,15 @@
+""" TODO
+"""
+
 import os
-import numpy as np
+
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+import numpy as np
 from clock_net import helper, plot_helper
 
-def plot_weight_matrices(axes=None):
+
+def plot_weight_matrices(axes: Axes = None):
 
     assert axes is not None, 'Need axes object.'
 
@@ -36,7 +42,8 @@ def plot_weight_matrices(axes=None):
 
 #     print(np.allclose(plot_helper.matrix_from_connections(old_connections), plot_helper.matrix_from_connections(new_connections)))
 
-def plot_2_mins_weight_matrix(ax=None, filename=None):
+
+def plot_2_mins_weight_matrix(ax: Axes = None, filename: str = None):
     assert ax is not None, 'Need axes object.'
     assert filename is not None, 'Need filename.'
 
@@ -45,12 +52,12 @@ def plot_2_mins_weight_matrix(ax=None, filename=None):
 
 
 def get_data_path():
-    path_dict = {} 
+    path_dict = {}
     path_dict['data_root_path'] = 'data'
-    path_dict['project_name'] = 'sequence_learning_performance' 
+    path_dict['project_name'] = 'sequence_learning_performance'
     path_dict['parameterspace_label'] = 'sequence_learning_and_prediction'
 
-    # get parameters 
+    # get parameters
     PS, PS_path = helper.get_parameter_set(path_dict)
     replay = False
     PL = helper.parameter_set_list(PS)
@@ -61,20 +68,20 @@ def get_data_path():
         data_path = helper.get_data_path(params['data_path'], params['label'], 'replay')
     else:
         data_path = helper.get_data_path(params['data_path'], params['label'])
-    
+
     return data_path
+
 
 if __name__ == '__main__':
     with plt.rc_context({
-
-            # plot settings 
-            'font.size': 8,
-            'legend.fontsize': 6,
-            'figure.figsize': (10,5),
-            'font.family': 'sans-serif',
-            'text.usetex': False
-            }):
-        figure, axes = plt.subplots(1,3)
+                        # plot settings
+                        'font.size': 8,
+                        'legend.fontsize': 6,
+                        'figure.figsize': (10, 5),
+                        'font.family': 'sans-serif',
+                        'text.usetex': False
+                        }):
+        figure, axes = plt.subplots(1, 3)
         plot_weight_matrices(axes)
         figure.tight_layout()
         plt.show()
