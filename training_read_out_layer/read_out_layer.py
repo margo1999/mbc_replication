@@ -392,8 +392,14 @@ def main():
     conns = nest.GetConnections(source=model_instance.exc_neurons, target=r_neurons)
     conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
     np.save(os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'readout_weights'), conns)  # TODO no absolute paths
-    plt.rcParams["figure.figsize"] = (10, 10)
-    plot_helper.plot_weight_matrix(ax=None, connections=conns, title='trained read-out synapses', cmap='viridis')
+    exc_spikes, inh_spikes, readout_spikes = plot_helper.load_spikes(filepath='/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', filename='spikes_after_learning_' + paramset_readout['recording_setup'] + '.pickle')
+    figure, axes = plt.subplots(1, 3)
+    figure.set_size_inches(17, 9)
+    plot_helper.plot_weight_matrix(ax=axes[0], connections=conns, title='trained read-out synapses', cmap='viridis')
+    if len(readout_spikes) > 0:
+        plot_helper.plot_spikes(ax=axes[1], R_spikes=readout_spikes)
+    plot_helper.plot_spikes(ax=axes[2], exh_spikes=exc_spikes, inh_spikes=inh_spikes)
+    # TODO Save plot for later
     plt.show()
 
 
