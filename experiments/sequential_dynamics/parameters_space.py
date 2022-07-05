@@ -410,10 +410,11 @@ param_readout['syn_dict_re'] = {'synapse_model': 'clopath_synapse',         # Na
 param_readout['conn_dict_re'] = {'rule': 'all_to_all'}                      # Connection rule
 
 # ========================================== simulation parameters ==========================================
-param_readout['sim_time'] = 12000       # Trainings time, indicates how long the learning of a sequence takes in total (ms)
-param_readout['stimulation_time'] = 75   # Stimulation time for the presentation of one element, determines how long the supervisor generator sends signals to the corresponding S neuron (ms)
-param_readout['lead_time'] = 50          # Lead time to allow the recurrent network to exhibit sequential dynamics (ms)
-param_readout['recording_time'] = 1500  # Duration of the recording of the spike behavior (ms)
+param_readout['sim_time'] = 12000                                   # Trainings time, indicates how long the learning of a sequence takes in total (ms)
+param_readout['stimulation_time'] = 75                              # Stimulation time for the presentation of one element, determines how long the supervisor generator sends signals to the corresponding S neuron (ms)
+param_readout['lead_time'] = 50                                     # Lead time to allow the recurrent network to exhibit sequential dynamics (ms)
+param_readout['recording_time'] = 1500                              # Duration of the recording of the spike behavior (ms)
+param_readout['recording_setup'] = 'disconnect_readout_generators'  # Determines which nodes influence the dynamics of the network during the replay phase ('disconnect_readout_generators', 'disconnect_readout_population', 'all_nodes')
 
 # ========================================== data path dict ==========================================
 # TODO

@@ -17,11 +17,11 @@ from clock_net.model import Model
 from experiments.sequential_dynamics.parameters_space import param_recurrent as paramspace_recurrent, param_readout as paramspace_readout
 
 
-OFFSET = 30  # TODO meanings
-PROBE_INTERVAL_LAST = 5
-PROBE_INTERVAL_FIRST = 2
-CLUSTER_ACTIVITY_THRESHOLD = 5
-ASSERTION_TIME_THRESHOLD = 700
+OFFSET = 30                         # Time interval between the activation of the first cluster and the presentation of the first element of the sequence (ms)
+PROBE_INTERVAL_LAST = 5             # Probe interval in which the activity of the last cluster is measured in order to detect the start of a sequential run in the RNN (ms)
+PROBE_INTERVAL_FIRST = 2            # Probe interval in which the activity of the first cluster is measured in order to detect the start of a sequential run in the RNN (ms)
+CLUSTER_ACTIVITY_THRESHOLD = 5      # required amount of spikes within a cluster so that its activity can be inferred (ms)
+ASSERTION_TIME_THRESHOLD = 700      # Limited time interval to prevent infinite loops if the parameters for detecting the start of a sequential run are not set appropriately (ms)
 
 
 def create_read_out_layer_population(*, params_ro: ParameterSet, alphabet: set) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
@@ -181,7 +181,7 @@ def connect_spike_recorders(*, model_instance: Model, r_neurons: nest.NodeCollec
     nest.Connect(r_neurons, sr_r)
 
 
-def save_spikes_after_sim(sr_e: nest.NodeCollection, sr_i: nest.NodeCollection, sr_r: nest.NodeCollection):
+def save_spikes_after_sim(*, sr_e: nest.NodeCollection, sr_i: nest.NodeCollection, sr_r: nest.NodeCollection, params_ro: ParameterSet):
     """Saves all spikes of inhibitory (I), excitatory (E) and read-out (R) neurons that occurred during the
        recording time in a pickle file. The data can be used to plot the spike behavior.
 
@@ -189,6 +189,7 @@ def save_spikes_after_sim(sr_e: nest.NodeCollection, sr_i: nest.NodeCollection, 
         sr_e (nest.NodeCollection): spike recorder for excitatory neurons (E)
         sr_i (nest.NodeCollection): spike recorder for inhibitory neurons (I)
         sr_r (nest.NodeCollection): spike recorder for read-out neurons (R)
+        params_ro (ParameterSet): Dictionary of read-out parameters including recording setup
     """
     sr_times_e = sr_e.events['times']
     sr_senders_e = sr_e.events['senders']
@@ -200,11 +201,45 @@ def save_spikes_after_sim(sr_e: nest.NodeCollection, sr_i: nest.NodeCollection, 
     sr_senders_r = sr_r.events['senders']
 
     spikes = dict(sr_times_e=sr_times_e, sr_senders_e=sr_senders_e, sr_times_i=sr_times_i, sr_senders_i=sr_senders_i, sr_times_r=sr_times_r, sr_senders_r=sr_senders_r)
-    spikefilepath = os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'spikes_after_learning.pickle')  # TODO
+    spikefilepath = os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'spikes_after_learning_' + params_ro['recording_setup'] + '.pickle')  # TODO
     dump(spikes, open(spikefilepath, "wb"))
 
 
-def simulate_sequence_learning(*, model_instance: Model, params_ro: ParameterSet, sim_time: int, sequence: str, r_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection,
+def disconnect_readout_generators(*, gen_h: nest.NodeCollection, gen_s_baseline: nest.NodeCollection, gen_s: nest.NodeCollection):
+    """_summary_
+
+    Args:
+        gen_h (nest.NodeCollection): _description_
+        gen_s_baseline (nest.NodeCollection): _description_
+        gen_s (nest.NodeCollection): _description_
+        h_neurons (nest.NodeCollection): _description_
+        s_neurons (nest.NodeCollection): _description_
+    """
+    sg_baseline_conns = nest.GetConnections(source=gen_s_baseline)
+    sg_conns = nest.GetConnections(source=gen_s)
+    hg_conns = nest.GetConnections(source=gen_h)
+    sg_baseline_conns.weight = 0.0
+    sg_conns.weight = 0.0
+    hg_conns.weight = 0.0
+
+
+def disconnect_readout_population(*, r_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, h_neurons: nest.NodeCollection):
+    """_summary_
+
+    Args:
+        r_neurons (nest.NodeCollection): _description_
+        s_neurons (nest.NodeCollection): _description_
+        h_neurons (nest.NodeCollection): _description_
+    """
+    rs_conns = nest.GetConnections(source=s_neurons, target=r_neurons)
+    rh_conns = nest.GetConnections(source=h_neurons, target=r_neurons)
+    hr_conns = nest.GetConnections(source=r_neurons, target=h_neurons)
+    rs_conns.weight = 0.0
+    rh_conns.weight = 0.0
+    hr_conns.weight = 0.0
+
+
+def simulate_sequence_learning(*, params_ro: ParameterSet, sim_time: int, sequence: str, r_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection,
                                sr_first: nest.NodeCollection, sr_last: nest.NodeCollection):
     """_summary_
 
@@ -232,10 +267,6 @@ def simulate_sequence_learning(*, model_instance: Model, params_ro: ParameterSet
 
     stimulation_time = params_ro['stimulation_time']
     lead_time = params_ro['lead_time']
-    recording_time = params_ro['recording_time']
-
-    sr_e, sr_i, sr_r = create_spike_recorders()
-    connect_spike_recorders(model_instance=model_instance, r_neurons=r_neurons, sr_e=sr_e, sr_i=sr_i, sr_r=sr_r)
 
     # Simulate
     print(f"{nest.biological_time=}")
@@ -275,15 +306,6 @@ def simulate_sequence_learning(*, model_instance: Model, params_ro: ParameterSet
             nest.Run(stimulation_time)
             conn.weight = list(reversed(conn.weight))
         nest.Cleanup()
-
-    sr_r.origin = nest.biological_time
-    sr_r.stop = recording_time
-    sr_e.origin = nest.biological_time
-    sr_e.stop = recording_time
-    sr_i.origin = nest.biological_time
-    sr_i.stop = recording_time
-    nest.Simulate(recording_time)
-    save_spikes_after_sim(sr_e=sr_e, sr_i=sr_i, sr_r=sr_r)
 
 
 def main():
@@ -342,7 +364,29 @@ def main():
     connect_spike_recorders_for_detection(model_instance=model_instance, sr_first=sr_first, sr_last=sr_last)
 
     # Simulate training
-    simulate_sequence_learning(model_instance=model_instance, params_ro=paramset_readout, sim_time=sim_time, sequence=sequence, r_neurons=r_neurons, s_neurons=s_neurons, sr_first=sr_first, sr_last=sr_last)
+    simulate_sequence_learning(params_ro=paramset_readout, sim_time=sim_time, sequence=sequence, r_neurons=r_neurons, s_neurons=s_neurons, sr_first=sr_first, sr_last=sr_last)
+
+    # Record spike behavior after learning
+    recording_setup = paramset_readout['recording_setup']
+    sr_e, sr_i, sr_r = create_spike_recorders()
+    connect_spike_recorders(model_instance=model_instance, r_neurons=r_neurons, sr_e=sr_e, sr_i=sr_i, sr_r=sr_r)
+
+    if recording_setup == 'disconnect_readout_generators':
+        disconnect_readout_generators(gen_h=gen_h, gen_s_baseline=gen_s_baseline, gen_s=gen_s)
+    elif recording_setup == 'disconnect_readout_population':
+        disconnect_readout_population(r_neurons=r_neurons, s_neurons=s_neurons, h_neurons=h_neurons)
+    else:
+        assert recording_setup == 'all_nodes'
+
+    sr_r.origin = nest.biological_time
+    sr_r.stop = recording_time
+    sr_e.origin = nest.biological_time
+    sr_e.stop = recording_time
+    sr_i.origin = nest.biological_time
+    sr_i.stop = recording_time
+
+    nest.Simulate(paramset_readout['recording_time'])
+    save_spikes_after_sim(sr_e=sr_e, sr_i=sr_i, sr_r=sr_r, params_ro=paramset_readout)
 
     # results
     conns = nest.GetConnections(source=model_instance.exc_neurons, target=r_neurons)
