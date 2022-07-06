@@ -24,92 +24,123 @@ CLUSTER_ACTIVITY_THRESHOLD = 5      # required amount of spikes within a cluster
 ASSERTION_TIME_THRESHOLD = 700      # Limited time interval to prevent infinite loops if the parameters for detecting the start of a sequential run are not set appropriately (ms)
 
 
-def create_read_out_layer_population(*, params_ro: ParameterSet, alphabet: set) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
-    """Creates all required neurons in the read-out component of the network to set up learning of
-       a sequence. For each distinct element of the sequence a read-out neuron (R), a supervisor
-       neuron (S) and an interneuron (H) are created. This function should only be called once per sequence.
-
-    Args:
-        params_ro (ParameterSet): Dictionary of read-out parameters including parameters of R,S and H neurons
-        alphabet (set): Collection of all distinct elements of the sequence
-
-    Returns:
-        Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]: read-out neurons (R), a supervisor neurons (S) and an interneurons (H)
+class SequenceModel:
+    """ TODO
     """
-    neuron_num = len(alphabet)
-    r_neurons = nest.Create(params_ro['read_out_model'], neuron_num, params_ro['read_out_params'])
-    s_neurons = nest.Create(params_ro['supervisor_model'], neuron_num, params_ro['supervisor_params'])
-    h_neurons = nest.Create(params_ro['interneuron_model'], neuron_num, params_ro['interneuron_params'])
+    gen_h = None
+    gen_s_baseline = None
+    gen_s = None
 
-    return r_neurons, s_neurons, h_neurons
+    @classmethod
+    def create_generators(cls, paramset_readout: ParameterSet):
+        """ TODO
+        """
+        cls.gen_h, cls.gen_s_baseline, cls.gen_s = cls._create_read_out_layer_generators(params_ro=paramset_readout)
 
+    def __init__(self, rnn_instance: Model, paramset_readout: ParameterSet, sequence: str):
+        """ TODO
+        """
+        if self.gen_h is None:
+            self.create_generators(paramset_readout)
 
-def create_read_out_layer_generators(*, params_ro: ParameterSet) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
-    """Creates three types of Poisson spike generators to enable learning of a sequence.
-       One constantly active generator for all interneurons (H). One baseline and one supervisor
-       generator for all supervisor neurons (S), whereby these alternate. The time of alternation
-       is given by the sequence.
+        self.sequence = sequence
+        self.alphabet = set(self.sequence)
 
-    Args:
-        params_ro (ParameterSet): Dictionary of read-out parameters including parameters of generators
+        # Create neurons and connections to get the final model architecture
+        self.r_neurons, self.s_neurons, self.h_neurons = self._create_read_out_layer_population(params_ro=paramset_readout, alphabet=self.alphabet)
+        self._connect_recurrent_to_readout(model_instance=rnn_instance, r_neurons=self.r_neurons, params_ro=paramset_readout)
+        self._connect_readout_population(r_neurons=self.r_neurons, s_neurons=self.s_neurons, h_neurons=self.h_neurons, params_ro=paramset_readout)
+        self._connect_readout_generators(gen_h=self.gen_h, gen_s_baseline=self.gen_s_baseline, gen_s=self.gen_s, h_neurons=self.h_neurons, s_neurons=self.s_neurons, params_ro=paramset_readout)
 
-    Returns:
-        Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]: Poisson generator for H neurons,
-        basline Poisson generator and supervisor Poisson generator for S neurons
-    """
-    gen_h = nest.Create('poisson_generator', params=dict(rate=params_ro['exh_rate_hx']))
-    gen_s_baseline = nest.Create('poisson_generator', params=dict(rate=params_ro['baseline_rate_sx']))
-    gen_s = nest.Create('poisson_generator', params=dict(rate=params_ro['exh_rate_sx']))
+        # assert nest.network_size == (rnn_instance.num_exc_neurons + rnn_instance.num_inh_neurons + 3 * len(alphabet))
 
-    return gen_h, gen_s_baseline, gen_s
+    @staticmethod
+    def _create_read_out_layer_population(*, params_ro: ParameterSet, alphabet: set) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
+        """Creates all required neurons in the read-out component of the network to set up learning of
+        a sequence. For each distinct element of the sequence a read-out neuron (R), a supervisor
+        neuron (S) and an interneuron (H) are created. This function should only be called once per sequence.
 
+        Args:
+            params_ro (ParameterSet): Dictionary of read-out parameters including parameters of R,S and H neurons
+            alphabet (set): Collection of all distinct elements of the sequence
 
-def connect_recurrent_to_readout(*, model_instance: Model, r_neurons: nest.NodeCollection, params_ro: ParameterSet):
-    """Connects excitatory neurons (E) of the recurrent network (RNN) all-to-all to read-out neurons (R)
-       in the read-out layer.
+        Returns:
+            Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]: read-out neurons (R), a supervisor neurons (S) and an interneurons (H)
+        """
+        neuron_num = len(alphabet)
+        r_neurons = nest.Create(params_ro['read_out_model'], neuron_num, params_ro['read_out_params'])
+        s_neurons = nest.Create(params_ro['supervisor_model'], neuron_num, params_ro['supervisor_params'])
+        h_neurons = nest.Create(params_ro['interneuron_model'], neuron_num, params_ro['interneuron_params'])
 
-    Args:
-        model_instance (Model): _description_
-        r_neurons (nest.NodeCollection): Read-out neurons (R)
-        params_ro (ParameterSet): Dictionary of read-out parameters including RE connection parameters (synapse type, weight,...)
-    """
-    nest.Connect(model_instance.exc_neurons, r_neurons, params_ro['conn_dict_re'], params_ro['syn_dict_re'])
+        return r_neurons, s_neurons, h_neurons
 
+    @staticmethod
+    def _create_read_out_layer_generators(*, params_ro: ParameterSet) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
+        """Creates three types of Poisson spike generators to enable learning of a sequence.
+        One constantly active generator for all interneurons (H). One baseline and one supervisor
+        generator for all supervisor neurons (S), whereby these alternate. The time of alternation
+        is given by the sequence.
 
-def connect_readout_population(*, r_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, h_neurons: nest.NodeCollection, params_ro: ParameterSet):
-    """Connects the neurons in the read-out layer accordingly. Read-out neurons (R) and Interneurons (H) are bidirectionally connected.
-       Supervisor neurons (S) are connected to Read-out neurons (R).
+        Args:
+            params_ro (ParameterSet): Dictionary of read-out parameters including parameters of generators
 
-    Args:
-        r_neurons (nest.NodeCollection): Read-out neurons (R)
-        s_neurons (nest.NodeCollection): Supervisor neurons (S)
-        h_neurons (nest.NodeCollection): Interneurons (H)
-        params_ro (ParameterSet): Dictionary of read-out parameters including connection parameters in the read-out layer (synapse type, weight,...)
-    """
-    nest.Connect(h_neurons, r_neurons, params_ro['conn_dict_rh'], params_ro['syn_dict_rh'])
-    nest.Connect(r_neurons, h_neurons, params_ro['conn_dict_hr'], params_ro['syn_dict_hr'])
-    nest.Connect(s_neurons, r_neurons, params_ro['conn_dict_rs'], params_ro['syn_dict_rs'])
+        Returns:
+            Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]: Poisson generator for H neurons,
+            basline Poisson generator and supervisor Poisson generator for S neurons
+        """
+        gen_h = nest.Create('poisson_generator', params=dict(rate=params_ro['exh_rate_hx']))
+        gen_s_baseline = nest.Create('poisson_generator', params=dict(rate=params_ro['baseline_rate_sx']))
+        gen_s = nest.Create('poisson_generator', params=dict(rate=params_ro['exh_rate_sx']))
 
+        return gen_h, gen_s_baseline, gen_s
 
-def connect_readout_generators(*, gen_h: nest.NodeCollection, gen_s_baseline: nest.NodeCollection, gen_s: nest.NodeCollection,
-                               h_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, params_ro: ParameterSet):
-    """Connects Poisson generators to supervisor (S) and interneurons (H) in the read-out layer to enable learning of a sequence. S neurons are connected to a
-       baseline generator and a supervisor generator. The two generators can only be active alternately, therefore the synaptic weight from the supervisor
-       generator to the S neuron is set to zero first (≈inactive). H neurons are only connected to one generator.
+    @staticmethod
+    def _connect_recurrent_to_readout(*, model_instance: Model, r_neurons: nest.NodeCollection, params_ro: ParameterSet):
+        """Connects excitatory neurons (E) of the recurrent network (RNN) all-to-all to read-out neurons (R)
+        in the read-out layer.
 
-    Args:
-        gen_h (nest.NodeCollection): Poisson generator for H neurons
-        gen_s_baseline (nest.NodeCollection): Baseline poisson generator for S neurons
-        gen_s (nest.NodeCollection): Supervisor poisson generator for S neurons
-        h_neurons (nest.NodeCollection): Interneurons (H)
-        s_neurons (nest.NodeCollection): Supervisor neurons (S)
-        params_ro (ParameterSet): Dictionary of read-out parameters including connection parameters for generators (weight,...)
-    """
-    nest.Connect(gen_h, h_neurons, conn_spec=params_ro['conn_dict_hx'], syn_spec=params_ro['syn_dict_hx'])
-    nest.Connect(gen_s_baseline, s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
-    nest.Connect(gen_s, s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
-    conn = nest.GetConnections(source=gen_s, target=s_neurons)
-    conn.weight = 0.0
+        Args:
+            model_instance (Model): _description_
+            r_neurons (nest.NodeCollection): Read-out neurons (R)
+            params_ro (ParameterSet): Dictionary of read-out parameters including RE connection parameters (synapse type, weight,...)
+        """
+        nest.Connect(model_instance.exc_neurons, r_neurons, params_ro['conn_dict_re'], params_ro['syn_dict_re'])
+
+    @staticmethod
+    def _connect_readout_population(*, r_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, h_neurons: nest.NodeCollection, params_ro: ParameterSet):
+        """Connects the neurons in the read-out layer accordingly. Read-out neurons (R) and Interneurons (H) are bidirectionally connected.
+        Supervisor neurons (S) are connected to Read-out neurons (R).
+
+        Args:
+            r_neurons (nest.NodeCollection): Read-out neurons (R)
+            s_neurons (nest.NodeCollection): Supervisor neurons (S)
+            h_neurons (nest.NodeCollection): Interneurons (H)
+            params_ro (ParameterSet): Dictionary of read-out parameters including connection parameters in the read-out layer (synapse type, weight,...)
+        """
+        nest.Connect(h_neurons, r_neurons, params_ro['conn_dict_rh'], params_ro['syn_dict_rh'])
+        nest.Connect(r_neurons, h_neurons, params_ro['conn_dict_hr'], params_ro['syn_dict_hr'])
+        nest.Connect(s_neurons, r_neurons, params_ro['conn_dict_rs'], params_ro['syn_dict_rs'])
+
+    @staticmethod
+    def _connect_readout_generators(*, gen_h: nest.NodeCollection, gen_s_baseline: nest.NodeCollection, gen_s: nest.NodeCollection,
+                                    h_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, params_ro: ParameterSet):
+        """Connects Poisson generators to supervisor (S) and interneurons (H) in the read-out layer to enable learning of a sequence. S neurons are connected to a
+        baseline generator and a supervisor generator. The two generators can only be active alternately, therefore the synaptic weight from the supervisor
+        generator to the S neuron is set to zero first (≈inactive). H neurons are only connected to one generator.
+
+        Args:
+            gen_h (nest.NodeCollection): Poisson generator for H neurons
+            gen_s_baseline (nest.NodeCollection): Baseline poisson generator for S neurons
+            gen_s (nest.NodeCollection): Supervisor poisson generator for S neurons
+            h_neurons (nest.NodeCollection): Interneurons (H)
+            s_neurons (nest.NodeCollection): Supervisor neurons (S)
+            params_ro (ParameterSet): Dictionary of read-out parameters including connection parameters for generators (weight,...)
+        """
+        nest.Connect(gen_h, h_neurons, conn_spec=params_ro['conn_dict_hx'], syn_spec=params_ro['syn_dict_hx'])
+        nest.Connect(gen_s_baseline, s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
+        nest.Connect(gen_s, s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
+        conn = nest.GetConnections(source=gen_s, target=s_neurons)
+        conn.weight = 0.0
 
 
 def create_spike_recorders_for_detection() -> Tuple[nest.NodeCollection, nest.NodeCollection]:
@@ -324,7 +355,6 @@ def main():
     recording_time = paramset_readout['recording_time']
     sequences, _, vocabulary = helper.generate_sequences(paramset_recurrent['task'], paramset_recurrent['data_path'], paramset_recurrent['label'])
     sequence = 'ABCBA'  # TODO learn multiple sequences
-    alphabet = set(sequence)
 
     # ===============================================================
     # create network (learned recurrent network + read-out layer)
@@ -341,40 +371,30 @@ def main():
     # plot_helper.plot_weight_matrix(ax=None, connections=conns, title='initial trained weight matrix')
     # plt.show()
 
-    # Create neurons and connections to get the final model architecture
-    r_neurons, s_neurons, h_neurons = create_read_out_layer_population(params_ro=paramset_readout, alphabet=alphabet)
-    connect_recurrent_to_readout(model_instance=model_instance, r_neurons=r_neurons, params_ro=paramset_readout)
-    connect_readout_population(r_neurons=r_neurons, s_neurons=s_neurons, h_neurons=h_neurons, params_ro=paramset_readout)
-
-    assert nest.network_size == (model_instance.num_exc_neurons + model_instance.num_inh_neurons + 3 * len(alphabet))
-
     # Create Poisson Generators and connect them to achive spontaneous dynamics in RNN
     model_instance.set_up_spontaneous_dynamics(sim_time + recording_time)
 
-    # Create Poisson Generators for S and H neurons
-    gen_h, gen_s_baseline, gen_s = create_read_out_layer_generators(params_ro=paramset_readout)
-    connect_readout_generators(gen_h=gen_h, gen_s_baseline=gen_s_baseline, gen_s=gen_s, h_neurons=h_neurons, s_neurons=s_neurons, params_ro=paramset_readout)
-
     print(f"{nest.network_size=}")
-    print(nest.GetConnections(target=s_neurons))
-    assert nest.network_size == (model_instance.num_exc_neurons + model_instance.num_inh_neurons + 3 * (1 + len(alphabet)) + 2)
+    # print(nest.GetConnections(target=s_neurons))
+    # assert nest.network_size == (model_instance.num_exc_neurons + model_instance.num_inh_neurons + 3 * (1 + len(alphabet)) + 2)
+    first_sequence_model = SequenceModel(rnn_instance=model_instance, paramset_readout=paramset_readout, sequence=sequence)
 
     # Create and connect spike recorders to identify beginning of sequential dynamics
     sr_first, sr_last = create_spike_recorders_for_detection()
     connect_spike_recorders_for_detection(model_instance=model_instance, sr_first=sr_first, sr_last=sr_last)
 
     # Simulate training
-    simulate_sequence_learning(params_ro=paramset_readout, sim_time=sim_time, sequence=sequence, r_neurons=r_neurons, s_neurons=s_neurons, sr_first=sr_first, sr_last=sr_last)
+    simulate_sequence_learning(params_ro=paramset_readout, sim_time=sim_time, sequence=sequence, r_neurons=first_sequence_model.r_neurons, s_neurons=first_sequence_model.s_neurons, sr_first=sr_first, sr_last=sr_last)
 
     # Record spike behavior after learning
     recording_setup = paramset_readout['recording_setup']
     sr_e, sr_i, sr_r = create_spike_recorders()
-    connect_spike_recorders(model_instance=model_instance, r_neurons=r_neurons, sr_e=sr_e, sr_i=sr_i, sr_r=sr_r)
+    connect_spike_recorders(model_instance=model_instance, r_neurons=first_sequence_model.r_neurons, sr_e=sr_e, sr_i=sr_i, sr_r=sr_r)
 
     if recording_setup == 'disconnect_readout_generators':
-        disconnect_readout_generators(gen_h=gen_h, gen_s_baseline=gen_s_baseline, gen_s=gen_s)
+        disconnect_readout_generators(gen_h=SequenceModel.gen_h, gen_s_baseline=SequenceModel.gen_s_baseline, gen_s=SequenceModel.gen_s)
     elif recording_setup == 'disconnect_readout_population':
-        disconnect_readout_population(r_neurons=r_neurons, s_neurons=s_neurons, h_neurons=h_neurons)
+        disconnect_readout_population(r_neurons=first_sequence_model.r_neurons, s_neurons=first_sequence_model.s_neurons, h_neurons=first_sequence_model.h_neurons)
     else:
         assert recording_setup == 'all_nodes'
 
@@ -389,7 +409,7 @@ def main():
     save_spikes_after_sim(sr_e=sr_e, sr_i=sr_i, sr_r=sr_r, params_ro=paramset_readout)
 
     # results
-    conns = nest.GetConnections(source=model_instance.exc_neurons, target=r_neurons)
+    conns = nest.GetConnections(source=model_instance.exc_neurons, target=first_sequence_model.r_neurons)
     conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
     np.save(os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'readout_weights'), conns)  # TODO no absolute paths
     exc_spikes, inh_spikes, readout_spikes = plot_helper.load_spikes(filepath='/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', filename='spikes_after_learning_' + paramset_readout['recording_setup'] + '.pickle')
