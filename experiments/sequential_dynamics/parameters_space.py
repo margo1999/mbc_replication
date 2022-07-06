@@ -409,13 +409,6 @@ param_readout['syn_dict_re'] = {'synapse_model': 'clopath_synapse',         # Na
                                 }
 param_readout['conn_dict_re'] = {'rule': 'all_to_all'}                      # Connection rule
 
-# ========================================== simulation parameters ==========================================
-param_readout['sim_time'] = 12000                                   # Trainings time, indicates how long the learning of a sequence takes in total (ms)
-param_readout['stimulation_time'] = 75                              # Stimulation time for the presentation of one element, determines how long the supervisor generator sends signals to the corresponding S neuron (ms)
-param_readout['lead_time'] = 50                                     # Lead time to allow the recurrent network to exhibit sequential dynamics (ms)
-param_readout['recording_time'] = 1500                              # Duration of the recording of the spike behavior (ms)
-param_readout['recording_setup'] = 'disconnect_readout_generators'  # Determines which nodes influence the dynamics of the network during the replay phase ('disconnect_readout_generators', 'disconnect_readout_population', 'all_nodes')
-
 # ========================================== data path dict ==========================================
 # TODO
 # Simulation results such as spike times and connection weights are stored in clock_net/data/sequence_learning_performance/sequence_learning_and_prediction
@@ -426,6 +419,7 @@ param_readout['data_path']['parameterspace_label'] = 'sequence_learning_and_pred
 
 # ========================================== task parameters ==========================================
 # TODO
+param_readout['sequences'] = ['ABCBA', 'DEDED']            # Hard coded sequences to be learned
 param_readout['task'] = {}
 param_readout['task']['task_name'] = 'hard_coded'          # Name of the task ['high_order', 'random', 'structure', 'hard_coded']
 param_readout['task']['task_type'] = 1                     # This chooses between three hard coded sequence sets (see ./utils.py)
@@ -437,3 +431,11 @@ if param_readout['task']['task_name'] != 'hard_coded':
     param_readout['task']['num_sub_seq'] = 2               # If task_name == 'high_order', It sets the number of sequences with same shared subsequence
     param_readout['task']['length_sequence'] = 6           # Number of elements per sequence
     param_readout['task']['replace'] = False               # Random choice of characters with replacement
+
+# ========================================== simulation parameters ==========================================
+param_readout['sim_time'] = 12000 * len(param_readout['sequences'])  # Trainings time, indicates how long the learning of a sequence takes in total (ms)
+param_readout['switching_time'] = 2000                               # After this time there is a switch in sequence presentation (ms)
+param_readout['stimulation_time'] = 75                               # Stimulation time for the presentation of one element, determines how long the supervisor generator sends signals to the corresponding S neuron (ms)
+param_readout['lead_time'] = 50                                      # Lead time to allow the recurrent network to exhibit sequential dynamics (ms)
+param_readout['recording_time'] = 1500                               # Duration of the recording of the spike behavior (ms)
+param_readout['recording_setup'] = 'disconnect_readout_generators'   # Determines which nodes influence the dynamics of the network during the replay phase ('disconnect_readout_generators', 'disconnect_readout_population', 'all_nodes')
