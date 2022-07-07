@@ -27,52 +27,86 @@ ASSERTION_TIME_THRESHOLD = 700      # Limited time interval to prevent infinite 
 class SequenceModel:
     """ TODO
     """
+    rnn_model = None
+    sr_first = None
+    sr_last = None
     gen_h = None
     gen_s_baseline = None
     gen_s = None
+    sequence_selector = None
+    created_global_members = False
+
+    @classmethod
+    def setup(cls, paramset_recurrent: ParameterSet, paramset_readout: ParameterSet):
+        """ TODO
+        """
+        cls.create_rnn_model(paramset_recurrent=paramset_recurrent)
+        cls.create_generators(paramset_readout=paramset_readout)
+        cls.created_global_members = True
+
+    @classmethod
+    def create_rnn_model(cls, paramset_recurrent: ParameterSet):
+        """ TODO
+        """
+        sequences, _, vocabulary = helper.generate_sequences(paramset_recurrent['task'], paramset_recurrent['data_path'], paramset_recurrent['label'])  # TODO check if this works
+
+        cls.rnn_model = Model(paramset_recurrent, sequences, vocabulary)
+        cls.rnn_model.create_rnn_populations()
+        cls.rnn_model.load_connections(label='all_connections')
+
+        # # Plot loaded weights
+        # conns = nest.GetConnections()
+        # conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
+        # plot_helper.plot_weight_matrix(ax=None, connections=conns, title='initial trained weight matrix')
+        # plt.show()
+
+        # Create Poisson Generators and connect them to achive spontaneous dynamics in RNN
+        cls.rnn_model.set_up_spontaneous_dynamics(sys.maxsize)  # TODO
+
+        # Create and connect spike recorders to identify beginning of sequential dynamics
+        cls.sr_first, cls.sr_last = create_spike_recorders_for_detection()
+        connect_spike_recorders_for_detection(model_instance=cls.rnn_model, sr_first=cls.sr_first, sr_last=cls.sr_last)
+
+        print(f"{nest.network_size=} after setting up RNN + random input generators + spike recorders for detection")
+        assert nest.network_size == (cls.rnn_model.num_exc_neurons + cls.rnn_model.num_inh_neurons + 2 + 2)
 
     @classmethod
     def create_generators(cls, paramset_readout: ParameterSet):
         """ TODO
         """
         cls.gen_h, cls.gen_s_baseline, cls.gen_s = cls._create_read_out_layer_generators(params_ro=paramset_readout)
+        cls.sequence_selector = cls._create_sequence_selector(params_ro=paramset_readout)
 
-    def __init__(self, rnn_instance: Model, paramset_readout: ParameterSet, sequence: str):
+    def __init__(self, paramset_recurrent: ParameterSet, paramset_readout: ParameterSet, sequence: str):
         """ TODO
         """
-        if self.gen_h is None:
-            self.create_generators(paramset_readout)
+        if not self.created_global_members:
+            self.setup(paramset_recurrent=paramset_recurrent, paramset_readout=paramset_readout)
 
         self.sequence = sequence
-        self.alphabet = set(self.sequence)
+        self.alphabet = sorted(set(self.sequence))
 
         # Create neurons and connections to get the final model architecture
-        self.r_neurons, self.s_neurons, self.h_neurons = self._create_read_out_layer_population(params_ro=paramset_readout, alphabet=self.alphabet)
-        self._connect_recurrent_to_readout(model_instance=rnn_instance, r_neurons=self.r_neurons, params_ro=paramset_readout)
-        self._connect_readout_population(r_neurons=self.r_neurons, s_neurons=self.s_neurons, h_neurons=self.h_neurons, params_ro=paramset_readout)
-        self._connect_readout_generators(gen_h=self.gen_h, gen_s_baseline=self.gen_s_baseline, gen_s=self.gen_s, h_neurons=self.h_neurons, s_neurons=self.s_neurons, params_ro=paramset_readout)
+        self._create_read_out_layer_population(params_ro=paramset_readout)
+        self._connect_recurrent_to_readout(params_ro=paramset_readout)
+        self._connect_readout_population(params_ro=paramset_readout)
+        self._connect_readout_generators(params_ro=paramset_readout)
+        self._connect_sequence_selectors(params_ro=paramset_readout)
 
-        # assert nest.network_size == (rnn_instance.num_exc_neurons + rnn_instance.num_inh_neurons + 3 * len(alphabet))
+        self.read_out_dict = dict(zip(self.alphabet, self.s_neurons))
 
-    @staticmethod
-    def _create_read_out_layer_population(*, params_ro: ParameterSet, alphabet: set) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
+    def _create_read_out_layer_population(self, *, params_ro: ParameterSet):
         """Creates all required neurons in the read-out component of the network to set up learning of
         a sequence. For each distinct element of the sequence a read-out neuron (R), a supervisor
         neuron (S) and an interneuron (H) are created. This function should only be called once per sequence.
 
         Args:
             params_ro (ParameterSet): Dictionary of read-out parameters including parameters of R,S and H neurons
-            alphabet (set): Collection of all distinct elements of the sequence
-
-        Returns:
-            Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]: read-out neurons (R), a supervisor neurons (S) and an interneurons (H)
         """
-        neuron_num = len(alphabet)
-        r_neurons = nest.Create(params_ro['read_out_model'], neuron_num, params_ro['read_out_params'])
-        s_neurons = nest.Create(params_ro['supervisor_model'], neuron_num, params_ro['supervisor_params'])
-        h_neurons = nest.Create(params_ro['interneuron_model'], neuron_num, params_ro['interneuron_params'])
-
-        return r_neurons, s_neurons, h_neurons
+        neuron_num = len(self.alphabet)
+        self.r_neurons = nest.Create(params_ro['read_out_model'], neuron_num, params_ro['read_out_params'])
+        self.s_neurons = nest.Create(params_ro['supervisor_model'], neuron_num, params_ro['supervisor_params'])
+        self.h_neurons = nest.Create(params_ro['interneuron_model'], neuron_num, params_ro['interneuron_params'])
 
     @staticmethod
     def _create_read_out_layer_generators(*, params_ro: ParameterSet) -> Tuple[nest.NodeCollection, nest.NodeCollection, nest.NodeCollection]:
@@ -95,52 +129,47 @@ class SequenceModel:
         return gen_h, gen_s_baseline, gen_s
 
     @staticmethod
-    def _connect_recurrent_to_readout(*, model_instance: Model, r_neurons: nest.NodeCollection, params_ro: ParameterSet):
+    def _create_sequence_selector(*, params_ro: ParameterSet):
+        sequence_selector = nest.Create('poisson_generator', params=dict(origin=sys.maxsize, rate=params_ro['inh_rate_rx']))
+
+        return sequence_selector
+
+    def _connect_recurrent_to_readout(self, *, params_ro: ParameterSet):
         """Connects excitatory neurons (E) of the recurrent network (RNN) all-to-all to read-out neurons (R)
         in the read-out layer.
 
         Args:
-            model_instance (Model): _description_
-            r_neurons (nest.NodeCollection): Read-out neurons (R)
             params_ro (ParameterSet): Dictionary of read-out parameters including RE connection parameters (synapse type, weight,...)
         """
-        nest.Connect(model_instance.exc_neurons, r_neurons, params_ro['conn_dict_re'], params_ro['syn_dict_re'])
+        nest.Connect(self.rnn_model.exc_neurons, self.r_neurons, params_ro['conn_dict_re'], params_ro['syn_dict_re'])
 
-    @staticmethod
-    def _connect_readout_population(*, r_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, h_neurons: nest.NodeCollection, params_ro: ParameterSet):
+    def _connect_readout_population(self, *, params_ro: ParameterSet):
         """Connects the neurons in the read-out layer accordingly. Read-out neurons (R) and Interneurons (H) are bidirectionally connected.
         Supervisor neurons (S) are connected to Read-out neurons (R).
 
         Args:
-            r_neurons (nest.NodeCollection): Read-out neurons (R)
-            s_neurons (nest.NodeCollection): Supervisor neurons (S)
-            h_neurons (nest.NodeCollection): Interneurons (H)
             params_ro (ParameterSet): Dictionary of read-out parameters including connection parameters in the read-out layer (synapse type, weight,...)
         """
-        nest.Connect(h_neurons, r_neurons, params_ro['conn_dict_rh'], params_ro['syn_dict_rh'])
-        nest.Connect(r_neurons, h_neurons, params_ro['conn_dict_hr'], params_ro['syn_dict_hr'])
-        nest.Connect(s_neurons, r_neurons, params_ro['conn_dict_rs'], params_ro['syn_dict_rs'])
+        nest.Connect(self.h_neurons, self.r_neurons, params_ro['conn_dict_rh'], params_ro['syn_dict_rh'])
+        nest.Connect(self.r_neurons, self.h_neurons, params_ro['conn_dict_hr'], params_ro['syn_dict_hr'])
+        nest.Connect(self.s_neurons, self.r_neurons, params_ro['conn_dict_rs'], params_ro['syn_dict_rs'])
 
-    @staticmethod
-    def _connect_readout_generators(*, gen_h: nest.NodeCollection, gen_s_baseline: nest.NodeCollection, gen_s: nest.NodeCollection,
-                                    h_neurons: nest.NodeCollection, s_neurons: nest.NodeCollection, params_ro: ParameterSet):
+    def _connect_readout_generators(self, *, params_ro: ParameterSet):
         """Connects Poisson generators to supervisor (S) and interneurons (H) in the read-out layer to enable learning of a sequence. S neurons are connected to a
         baseline generator and a supervisor generator. The two generators can only be active alternately, therefore the synaptic weight from the supervisor
         generator to the S neuron is set to zero first (≈inactive). H neurons are only connected to one generator.
 
         Args:
-            gen_h (nest.NodeCollection): Poisson generator for H neurons
-            gen_s_baseline (nest.NodeCollection): Baseline poisson generator for S neurons
-            gen_s (nest.NodeCollection): Supervisor poisson generator for S neurons
-            h_neurons (nest.NodeCollection): Interneurons (H)
-            s_neurons (nest.NodeCollection): Supervisor neurons (S)
             params_ro (ParameterSet): Dictionary of read-out parameters including connection parameters for generators (weight,...)
         """
-        nest.Connect(gen_h, h_neurons, conn_spec=params_ro['conn_dict_hx'], syn_spec=params_ro['syn_dict_hx'])
-        nest.Connect(gen_s_baseline, s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
-        nest.Connect(gen_s, s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
-        conn = nest.GetConnections(source=gen_s, target=s_neurons)
+        nest.Connect(self.gen_h, self.h_neurons, conn_spec=params_ro['conn_dict_hx'], syn_spec=params_ro['syn_dict_hx'])
+        nest.Connect(self.gen_s_baseline, self.s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
+        nest.Connect(self.gen_s, self.s_neurons, conn_spec=params_ro['conn_dict_sx'], syn_spec=params_ro['syn_dict_sx'])
+        conn = nest.GetConnections(source=self.gen_s, target=self.s_neurons)
         conn.weight = 0.0
+
+    def _connect_sequence_selectors(self, *, params_ro: ParameterSet):
+        nest.Connect(self.sequence_selector, self.r_neurons, conn_spec=params_ro['conn_dict_rx'], syn_spec=params_ro['syn_dict_rx'])
 
 
 def create_spike_recorders_for_detection() -> Tuple[nest.NodeCollection, nest.NodeCollection]:
@@ -278,7 +307,7 @@ def disconnect_readout_population(*, r_neurons: nest.NodeCollection, s_neurons: 
     hr_conns.weight = 0.0
 
 
-def simulate_sequence_learning(*, params_ro: ParameterSet, sequence_model: SequenceModel, sr_first: nest.NodeCollection, sr_last: nest.NodeCollection):
+def simulate_sequence_learning(*, params_ro: ParameterSet, sequence_model: SequenceModel):
     """_summary_
 
     Args:
@@ -291,18 +320,12 @@ def simulate_sequence_learning(*, params_ro: ParameterSet, sequence_model: Seque
         s_neurons (nest.NodeCollection): Supervisor neurons (S)
         gen_s_baseline (nest.NodeCollection): Baseline poisson generator for S neurons
         gen_s (nest.NodeCollection): Supervisor poisson generator for S neurons
-        sr_first (nest.NodeCollection): spike recorder used to detect if the first cluster is being active
-        sr_last (nest.NodeCollection): spike recorder used to detect if the last cluster is being active
     """
     training_sequence = list(sequence_model.sequence)
     alphabet = sequence_model.alphabet
     assert len(sequence_model.r_neurons) == len(alphabet)
     assert len(sequence_model.s_neurons) == len(alphabet)
     assert len(sequence_model.h_neurons) == len(alphabet)
-
-    read_out_dict = {}
-    for idx, item in enumerate(alphabet):
-        read_out_dict[item] = sequence_model.s_neurons[idx]
 
     stimulation_time = params_ro['stimulation_time']
     lead_time = params_ro['lead_time']
@@ -312,8 +335,10 @@ def simulate_sequence_learning(*, params_ro: ParameterSet, sequence_model: Seque
         sim_time = params_ro['sim_time']
 
     # Simulate
+    sr_last = sequence_model.sr_last
+    sr_first = sequence_model.sr_first
     cur_time = nest.biological_time
-    print(f"{cur_time=}")
+    print(f"At {cur_time=} learn {sequence_model.sequence=}")
 
     nest.Simulate(lead_time)  # needed to exhibit sequential dynamics in recurrent network
 
@@ -345,68 +370,79 @@ def simulate_sequence_learning(*, params_ro: ParameterSet, sequence_model: Seque
         nest.Simulate(OFFSET)
         nest.Prepare()
         for item in tqdm(training_sequence):
-            conn = nest.GetConnections(target=read_out_dict[item])
+            conn = nest.GetConnections(target=sequence_model.read_out_dict[item])
             conn.weight = list(reversed(conn.weight))
             nest.Run(stimulation_time)
             conn.weight = list(reversed(conn.weight))
         nest.Cleanup()
 
 
+def replay_sequence(*, sequence_model: SequenceModel, replay_time: int):
+    """ TODO
+    """
+    sequence_model.sequence_selector.origin = nest.biological_time
+    sequence_model.sequence_selector.stop = replay_time
+
+    conns = nest.GetConnections(sequence_model.sequence_selector, sequence_model.r_neurons)
+    prev_weights = conns.weight
+    conns.weight = 0.0  # All other read-out populations are inhibited to suppress replaying multiple sequences at the same time
+
+    nest.Simulate(replay_time)
+
+    conns.weight = prev_weights
+
+
 def main():
     """_summary_
     """
+
+    # ===============================================================
+    # get all parameter sets
+    # ===============================================================
 
     # parameter-set id from command line (submission script)
     paramset_recurrent = helper.parameter_set_list(paramspace_recurrent)[0]  # TODO I only consider the first set ..
     paramset_readout = helper.parameter_set_list(paramspace_readout)[0]
 
     # ===============================================================
-    # specify sequences
+    # specify simulation times + sequences
     # ===============================================================
 
     sim_time = paramset_readout['sim_time']
     recording_time = paramset_readout['recording_time']
-    sequences, _, vocabulary = helper.generate_sequences(paramset_recurrent['task'], paramset_recurrent['data_path'], paramset_recurrent['label'])
-    sequence = 'ABCBA'  # TODO learn multiple sequences
+
+    sequences = paramset_readout['sequences']
 
     # ===============================================================
-    # create network (learned recurrent network + read-out layer)
+    # create recurrent network + random input generators
     # ===============================================================
-
     # Create the recurrent network where the weights are already learned to exhibit sequential dynamics
-    model_instance = Model(paramset_recurrent, sequences, vocabulary)
-    model_instance.create_rnn_populations()
-    model_instance.load_connections(label='all_connections')
 
-    # # Plot loaded weights
-    # conns = nest.GetConnections()
-    # conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
-    # plot_helper.plot_weight_matrix(ax=None, connections=conns, title='initial trained weight matrix')
-    # plt.show()
+    # ===============================================================
+    # create sequence learning models
+    # ===============================================================
 
-    # Create Poisson Generators and connect them to achive spontaneous dynamics in RNN
-    model_instance.set_up_spontaneous_dynamics(2 * sim_time + recording_time)  # TODO
-
-    # Create and connect spike recorders to identify beginning of sequential dynamics
-    sr_first, sr_last = create_spike_recorders_for_detection()
-    connect_spike_recorders_for_detection(model_instance=model_instance, sr_first=sr_first, sr_last=sr_last)
-
-    print(f"{nest.network_size=}")
-    # print(nest.GetConnections(target=s_neurons))
-    # assert nest.network_size == (model_instance.num_exc_neurons + model_instance.num_inh_neurons + 3 * (1 + len(alphabet)) + 2)
     sequence_models = {}
-    for seq in paramset_readout['sequences']:
-        sequence_models[seq] = SequenceModel(rnn_instance=model_instance, paramset_readout=paramset_readout, sequence=seq)
+    for seq in sequences:
+        sequence_models[seq] = SequenceModel(paramset_recurrent=paramset_recurrent, paramset_readout=paramset_readout, sequence=seq)
+
+    # ===============================================================
+    # learn all sequences
+    # ===============================================================
 
     # Simulate training
     while nest.biological_time < sim_time:
-        for seq, sequence_model in sequence_models.items():
-            simulate_sequence_learning(params_ro=paramset_readout, sequence_model=sequence_model, sr_first=sr_first, sr_last=sr_last)
+        for sequence_model in sequence_models.values():
+            simulate_sequence_learning(params_ro=paramset_readout, sequence_model=sequence_model)
+
+    # ===============================================================
+    # record spike behavior after learning sequences
+    # ===============================================================
 
     # Record spike behavior after learning
     recording_setup = paramset_readout['recording_setup']
     sr_e, sr_i, sr_r = create_spike_recorders()
-    connect_spike_recorders_to_rnn(model_instance=model_instance, sr_e=sr_e, sr_i=sr_i)
+    connect_spike_recorders_to_rnn(model_instance=SequenceModel.rnn_model, sr_e=sr_e, sr_i=sr_i)
 
     for sequence_model in sequence_models.values():
         connect_spike_recorders_to_readout(model_instance=sequence_model, sr_r=sr_r)
@@ -425,11 +461,19 @@ def main():
     sr_i.origin = nest.biological_time
     sr_i.stop = recording_time
 
-    nest.Simulate(paramset_readout['recording_time'])
+    # TODO after training, should the weights be frozen?
+
+    for seq, replay_time in paramset_readout['replay_tuples']:
+        replay_sequence(sequence_model=sequence_models[seq], replay_time=replay_time)
+
     save_spikes_after_sim(sr_e=sr_e, sr_i=sr_i, sr_r=sr_r, params_ro=paramset_readout)
 
-    # results
-    conns = nest.GetConnections(source=model_instance.exc_neurons, target=sequence_models[sequence].r_neurons)
+    # ===============================================================
+    # plot read-out weights + spike behavior
+    # ===============================================================
+
+    # results  # TODO instead of neuron ids rather plot their corresponding sequence element
+    conns = nest.GetConnections(source=SequenceModel.rnn_model.exc_neurons, target=sequence_models['DEDED'].r_neurons)  # TODO include all read-out weights in plott
     conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
     np.save(os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'readout_weights'), conns)  # TODO no absolute paths
     exc_spikes, inh_spikes, readout_spikes = plot_helper.load_spikes(filepath='/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', filename='spikes_after_learning_' + paramset_readout['recording_setup'] + '.pickle')

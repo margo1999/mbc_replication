@@ -362,6 +362,9 @@ param_readout['baseline_rate_sx'] = 1000.0                      # Basline rate o
 # Parameters of poisson generator to interneurons
 param_readout['exh_rate_hx'] = 1000.0                           # Rate of external excitatory input to interneurons (spikes/s)
 
+# Parameters of poisson generator to read-out neurons to select a certain sequence while replay
+param_readout['inh_rate_rx'] = 1000.0
+
 # ========================================== connection and synapse dictionaries ==========================================
 
 # Parameters of RS synapses (S neuron to E neurons)
@@ -399,6 +402,13 @@ param_readout['syn_dict_hx'] = {'synapse_model': 'static_synapse',          # Na
                                 }
 param_readout['conn_dict_hx'] = {'rule': 'all_to_all'}                      # Connection rule
 
+# Parameters of RX synapses (external to R neurons) (only relevant when replaying multiple sequences)
+param_readout['syn_dict_rx'] = {'synapse_model': 'static_synapse',          # Name of synapse model
+                                'weight': -200.0,                             # Synaptic weight (pF)
+                                'delay': RESOLUTION                         # Synaptic delay (ms)
+                                }
+param_readout['conn_dict_rx'] = {'rule': 'all_to_all'}                      # Connection rule
+
 # Parameters of RE synapses (voltage-based STDP for read-out synapses)
 param_readout['syn_dict_re'] = {'synapse_model': 'clopath_synapse',         # Name of synapse model
                                 'weight': 0.0,                              # Initial synaptic weight (pF)
@@ -433,9 +443,10 @@ if param_readout['task']['task_name'] != 'hard_coded':
     param_readout['task']['replace'] = False               # Random choice of characters with replacement
 
 # ========================================== simulation parameters ==========================================
-param_readout['sim_time'] = 12000 * len(param_readout['sequences'])  # Trainings time, indicates how long the learning of a sequence takes in total (ms)
-param_readout['switching_time'] = 2000                               # After this time there is a switch in sequence presentation (ms)
-param_readout['stimulation_time'] = 75                               # Stimulation time for the presentation of one element, determines how long the supervisor generator sends signals to the corresponding S neuron (ms)
-param_readout['lead_time'] = 50                                      # Lead time to allow the recurrent network to exhibit sequential dynamics (ms)
-param_readout['recording_time'] = 1500                               # Duration of the recording of the spike behavior (ms)
-param_readout['recording_setup'] = 'disconnect_readout_generators'   # Determines which nodes influence the dynamics of the network during the replay phase ('disconnect_readout_generators', 'disconnect_readout_population', 'all_nodes')
+param_readout['sim_time'] = 12000 * len(param_readout['sequences'])                     # Trainings time, indicates how long the learning of a sequence takes in total (ms)
+param_readout['switching_time'] = 2000                                                  # After this time there is a switch in sequence presentation (ms)
+param_readout['stimulation_time'] = 75                                                  # Stimulation time for the presentation of one element, determines how long the supervisor generator sends signals to the corresponding S neuron (ms)
+param_readout['lead_time'] = 50                                                         # Lead time to allow the recurrent network to exhibit sequential dynamics (ms)
+param_readout['recording_setup'] = 'disconnect_readout_generators'                      # Determines which nodes influence the dynamics of the network during the replay phase ('disconnect_readout_generators', 'disconnect_readout_population', 'all_nodes')
+param_readout['replay_tuples'] = [('ABCBA', 1000), ('DEDED', 1000)]                        # List of tuples where the tuple determines what sequence should be replayed for how long ((str, ms))
+param_readout['recording_time'] = sum([i for _, i in param_readout['replay_tuples']])   # Duration of the recording of the spike behavior (ms)
