@@ -256,6 +256,7 @@ param_recurrent['DeltaT_cue'] = 80.                 # Inter-cue interval during 
 # ==============================================================================================================================
 
 param_readout = para.ParameterSpace({})
+param_readout['param_recurrent'] = param_recurrent
 
 # ========================================== all node models ==========================================
 
