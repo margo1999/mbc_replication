@@ -1,7 +1,29 @@
-from pynestml.frontend.pynestml_frontend import to_nest, install_nest
+""" wo ist Nutzer installation von NEST
+"""
+# TODO documentation
 
-to_nest(input_path="/Users/Jette/GitRepo/clock_network/nestml_models/iaf_cond_diff_exp.nestml",
-       target_path="cpp_code",
-       logging_level="ERROR")
+import os
+import pynestml.frontend.pynestml_frontend
 
-install_nest("cpp_code", "/Users/Jette/GitRepo/nest-simulator/install")
+CLOCK_NETWORK_ROOT = os.path.dirname(os.path.dirname(__file__))
+print(f"{CLOCK_NETWORK_ROOT=}")
+
+NESTML_INPUT = os.path.join(CLOCK_NETWORK_ROOT, "nestml_models", "iaf_cond_diff_exp.nestml")
+NEST_SIMULATOR_INSTALL_LOCATION = os.path.join(os.path.dirname(CLOCK_NETWORK_ROOT), "nest-simulator", "install")
+
+if hasattr(pynestml.frontend.pynestml_frontend, "generate_nest_target"):
+    from pynestml.frontend.pynestml_frontend import generate_nest_target  # pylint: disable=no-name-in-module
+
+    generate_nest_target(input_path=NESTML_INPUT,
+                         target_path="cpp_code",
+                         logging_level="ERROR",
+                         codegen_opts={"nest_path": NEST_SIMULATOR_INSTALL_LOCATION})
+
+elif hasattr(pynestml.frontend.pynestml_frontend, "to_nest") and hasattr(pynestml.frontend.pynestml_frontend, "install_nest"):
+    from pynestml.frontend.pynestml_frontend import to_nest, install_nest
+
+    to_nest(input_path=NESTML_INPUT, target_path="cpp_code", logging_level="ERROR")
+
+    install_nest("cpp_code", NEST_SIMULATOR_INSTALL_LOCATION)
+else:
+    raise Exception("Cannot handle NESTML version")
