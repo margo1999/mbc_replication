@@ -7,4 +7,6 @@ nestml_models/cpp_code
 data
 *.DS_Store
 test.py
+.vscode
+Tests
 
