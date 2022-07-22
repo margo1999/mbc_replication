@@ -21,7 +21,7 @@ def plot_spikes(ax=None):
     path_dict['parameterspace_label'] = 'sequence_learning_and_prediction'
 
     # get parameters
-    PS, PS_path = helper.get_parameter_set(path_dict)
+    PS, PS_path = helper.get_parameter_set(path_dict)  # TODO remove helper.parameter_set_list() and fix data path
     replay = False
 
     # PS['DeltaT'] = 40.
