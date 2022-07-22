@@ -1,20 +1,28 @@
+""" TODO
+"""
 import os
 import sys
-from joblib import Parallel, delayed
 
-from clock_net import helper 
+from clock_net import helper
 
-def sim(i):
+
+def sim(i: int):
+    """_summary_ TODO documentation
+
+    Args:
+        i (int): _description_
+    """
     cmd = "python3 %s 0 %d 0" % (simulation_script, i)
     print(cmd)
     os.system(cmd)
 
 # get commmand line arguments
-#try:
+# try:
 #    simulation_script = sys.argv[1]
-#except:
+# except:
 #    print("provide simulation script!")
 #    sys.exit(1)
+
 
 if len(sys.argv) == 2:
     simulation_script = sys.argv[1]
@@ -26,9 +34,9 @@ else:
 
 if simulation_script == "training.py":
 
-    import parameters_space as data_pars 
- 
-    # Get parameters 
+    import parameters_space as data_pars
+
+    # Get parameters
     PS = data_pars.p
 else:
     path_dict = {}
@@ -36,17 +44,17 @@ else:
     path_dict['project_name'] = "sequence_learning_performance"
     path_dict['parameterspace_label'] = "stimulus_timing_analysis"
 
-    # Get parameters 
+    # Get parameters
     PS, data_path = helper.get_parameter_set(path_dict)
- 
-# Parameters list 
-PL = helper.parameter_set_list(PS)
 
-# Save parameters.py  
+# Parameters list
+PL = helper.param_list(PS)
+
+# Save parameters.py
 if simulation_script == "training.py":
     helper.copy_scripts(PS['data_path'], "parameters_space.py")
 
-# Simulation 
+# Simulation
 N = len(PL)
 print(f"{N=}" + '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 
@@ -57,4 +65,4 @@ os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 # Just for testing
 N = 1
 for i in range(N):
-     sim(i)
+    sim(i)
