@@ -427,6 +427,7 @@ param_readout['data_path'] = {}
 param_readout['data_path']['data_root_path'] = 'data'
 param_readout['data_path']['project_name'] = 'sequence_learning_performance'
 param_readout['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
+param_readout['rnn_connections'] = '/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/all_connections_42.npy'  # TODO
 
 # ========================================== task parameters ==========================================
 # TODO
