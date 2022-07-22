@@ -35,6 +35,7 @@ class SequenceModel:
     gen_s = None
     sequence_selector = None
     paramset_readout = {}
+    obj_list = []
     created_global_members = False
 
     @classmethod
@@ -54,7 +55,7 @@ class SequenceModel:
 
         cls.rnn_model = Model(paramset_recurrent, sequences, vocabulary)
         cls.rnn_model.create_rnn_populations()
-        cls.rnn_model.load_connections(label='all_connections')
+        cls.rnn_model.load_connections(data_path=cls.paramset_readout['rnn_connections'], static=True)  # rnn_connections could contain an empty string it will then use the connections trained by the RNN under the given parameters in parameter_space
 
         # # Plot loaded weights
         # conns = nest.GetConnections()
@@ -78,6 +79,20 @@ class SequenceModel:
         """
         cls.gen_h, cls.gen_s_baseline, cls.gen_s = cls._create_read_out_layer_generators(params_ro=cls.paramset_readout)
         cls.sequence_selector = cls._create_sequence_selector(params_ro=cls.paramset_readout)
+
+    @classmethod
+    def all_r_neurons(cls):
+        """_summary_ TODO documentation
+
+        Returns:
+            _type_: _description_
+        """
+        return sum([x.r_neurons for x in cls.obj_list], start=nest.NodeCollection())
+
+    def __new__(cls, *args, **kwargs):
+        obj = super().__new__(cls)
+        cls.obj_list.append(obj)
+        return obj
 
     def __init__(self, sequence: str):
         """ TODO documentation
@@ -254,7 +269,7 @@ def connect_spike_recorders_to_readout(*, model_instance: SequenceModel, sr_r: n
     nest.Connect(model_instance.r_neurons, sr_r)
 
 
-def save_spikes_after_sim(*, sr_e: nest.NodeCollection, sr_i: nest.NodeCollection, sr_r: nest.NodeCollection, params_ro: ParameterSet):
+def save_spikes_after_sim(*, sr_e: nest.NodeCollection, sr_i: nest.NodeCollection, sr_r: nest.NodeCollection, params_ro: ParameterSet, data_path: str):
     """Saves all spikes of inhibitory (I), excitatory (E) and read-out (R) neurons that occurred during the
        recording time in a pickle file. The data can be used to plot the spike behavior.
 
@@ -274,7 +289,7 @@ def save_spikes_after_sim(*, sr_e: nest.NodeCollection, sr_i: nest.NodeCollectio
     sr_senders_r = sr_r.events['senders']
 
     spikes = dict(sr_times_e=sr_times_e, sr_senders_e=sr_senders_e, sr_times_i=sr_times_i, sr_senders_i=sr_senders_i, sr_times_r=sr_times_r, sr_senders_r=sr_senders_r)
-    spikefilepath = os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'spikes_after_learning_' + params_ro['recording_setup'] + '.pickle')  # TODO
+    spikefilepath = os.path.join(data_path, 'spikes_after_learning_' + params_ro['recording_setup'] + '.pickle')
     dump(spikes, open(spikefilepath, "wb"))
 
 
@@ -415,7 +430,10 @@ def main():
 
     # parameter-set id from command line (submission script)
     paramset_readout = helper.parameter_set_list(paramspace_readout)[parameterset_idx]
-    paramset_readout['param_recurrent']['label'] = paramset_readout['label']
+    paramset_readout['param_recurrent']['label'] = helper.compute_parameter_set_hash(paramset_readout['param_recurrent'])
+    print(f"{paramset_readout['param_recurrent']['label']=}")
+
+    data_path = helper.get_data_path(paramset_readout['data_path'], paramset_readout['label'])
 
     # ===============================================================
     # specify simulation times + sequences
@@ -481,17 +499,21 @@ def main():
     for seq, replay_time in paramset_readout['replay_tuples']:
         replay_sequence(sequence_model=sequence_models[seq], replay_time=replay_time)
 
-    save_spikes_after_sim(sr_e=sr_e, sr_i=sr_i, sr_r=sr_r, params_ro=paramset_readout)
+    save_spikes_after_sim(sr_e=sr_e, sr_i=sr_i, sr_r=sr_r, params_ro=paramset_readout, data_path=data_path)
 
     # ===============================================================
     # plot read-out weights + spike behavior
     # ===============================================================
 
     # results  # TODO instead of neuron ids rather plot their corresponding sequence element
-    conns = nest.GetConnections(source=SequenceModel.rnn_model.exc_neurons, target=sequence_models['DEDED'].r_neurons)  # TODO include all read-out weights in plott
+    # r_neurons = nest.NodeCollection()
+    # for sequence_model in sequence_models.values():
+    #     r_neurons += sequence_model.r_neurons
+
+    conns = nest.GetConnections(source=SequenceModel.rnn_model.exc_neurons, target=SequenceModel.all_r_neurons())
     conns = nest.GetStatus(conns, ['target', 'source', 'weight'])
-    np.save(os.path.join('/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', 'readout_weights'), conns)  # TODO no absolute paths
-    exc_spikes, inh_spikes, readout_spikes = plot_helper.load_spikes(filepath='/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/', filename='spikes_after_learning_' + paramset_readout['recording_setup'] + '.pickle')
+    np.save(os.path.join(data_path, 'readout_weights'), conns)
+    exc_spikes, inh_spikes, readout_spikes = plot_helper.load_spikes(filepath=data_path, filename='spikes_after_learning_' + paramset_readout['recording_setup'] + '.pickle')
     figure, axes = plt.subplots(1, 3)
     figure.set_size_inches(17, 9)
     plot_helper.plot_weight_matrix(ax=axes[0], connections=conns, title='trained read-out synapses', cmap='viridis')
