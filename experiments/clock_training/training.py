@@ -13,7 +13,9 @@ from pprint import pprint
 
 import nest
 import numpy as np
-from clock_net import helper, model
+
+import mbc_network.models.clock_model as clock_model
+import mbc_network.helper.training_helper as training_helper
 
 
 def generate_reference_data():
@@ -31,22 +33,20 @@ def generate_reference_data():
     # ===========================================================
     # get network and training parameters
     # ===========================================================
-    PS = model.get_parameters()
+    PS = clock_model.get_parameters()
 
     # parameter-set id from command line (submission script)
-    PL = helper.parameter_set_list(PS)
+    PL = training_helper.parameter_set_list(PS)
 
-    # TODO: use argparse with default values
-    try:
-        batch_id = int(sys.argv[1])
-        batch_array_id = int(sys.argv[2])
-        JOBMAX = int(sys.argv[3])
-        array_id = batch_id * JOBMAX + batch_array_id
-    except:
-        array_id = 0
+    task_id = 0
 
-    params = PL[array_id]
-    resultpath = helper.get_data_path(params['data_path'], params['label'])
+    if len(sys.argv) > 1:
+        task_id = int(sys.argv[1])
+
+    parameterset_idx = task_id
+
+    params = PL[parameterset_idx]
+    resultpath = training_helper.get_data_path(params['data_path'], params['label'])
 
     # start time
     time_start = time.time()
@@ -54,12 +54,12 @@ def generate_reference_data():
     # ===========================================================
     # specify sequences
     # ===========================================================
-    sequences, _, vocabulary = helper.generate_sequences(params['task'], params['data_path'], params['label'])
+    sequences, _, vocabulary = training_helper.generate_sequences(params['task'], params['data_path'], params['label'])
 
     # ===========================================================
     # create network
     # ===========================================================
-    model_instance = model.Model(params, sequences, vocabulary)
+    model_instance = clock_model.Model(params, sequences, vocabulary)
     time_model = time.time()
 
     model_instance.create()

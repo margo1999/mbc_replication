@@ -204,8 +204,6 @@ param_recurrent['seed'] = SEED  # para.ParameterRange([1])                      
 param_recurrent['print_simulation_progress'] = False                                                              # Print the time progress
 param_recurrent['n_threads'] = 1                                                                                  # Number of threads per MPI process
 param_recurrent['idend_record_time'] = 8.                                                                         # Time interval after the external stimulation at which the dendritic current is recorded TODO: Do we need this?
-param_recurrent['evaluate_performance'] = True                                                                    # True: we monitor the dendritic current at a certain time steps during the simulation. This then is used for the prediction performance assessment
-param_recurrent['evaluate_replay'] = False                                                                        # TODO: What is this?
 param_recurrent['store_connections'] = True                                                                       # Stores connection in a seperate file (bool)
 param_recurrent['load_connections'] = False                                                                        # Loads connection from existing file (bool)
 param_recurrent['cluster_stimulation_time'] = 10.0                                                                # Stimulation time from external input to excitatory cluster (ms)
@@ -215,28 +213,15 @@ param_recurrent['training_iterations'] = 30                                     
 param_recurrent['normalization_time'] = para.ParameterRange([20.0, 50.0, 100.0, 200.0, 225.0, 450.0])             # Time after normalization is necessary (ms)
 param_recurrent['random_dynamics'] = True                                                                         # If turned on, a phase of spontaneous dynamics follows after training phase (bool)
 param_recurrent['random_dynamics_time'] = 1.0 * 60.0 * 60.0 * 1000.0                                              # Time of spontaneous dynamics (ms)
+param_recurrent['plotting_time'] = 3000.0
 
 # ========================================== data path dict ==========================================
 
 # Simulation results such as spike times and connection weights are stored in clock_net/data/sequence_learning_performance/sequence_learning_and_prediction
 param_recurrent['data_path'] = {}
-param_recurrent['data_path']['data_root_path'] = 'data'
-param_recurrent['data_path']['project_name'] = 'sequence_learning_performance'
-param_recurrent['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
-
-# ========================================== task parameters ==========================================
-
-param_recurrent['task'] = {}
-param_recurrent['task']['task_name'] = 'hard_coded'          # Name of the task ['high_order', 'random', 'structure', 'hard_coded']
-param_recurrent['task']['task_type'] = 1                     # This chooses between three hard coded sequence sets (see ./utils.py)
-param_recurrent['task']['vocab_size'] = 6                    # Vocabulary size
-param_recurrent['task']['seed'] = 111                        # Seed number
-param_recurrent['task']['store_training_data'] = True        # If turned on, the sequence set is stored in directory defined in dict data_path
-if param_recurrent['task']['task_name'] != 'hard_coded':
-    param_recurrent['task']['num_sequences'] = 2             # Number of sequences per sequence set
-    param_recurrent['task']['num_sub_seq'] = 2               # If task_name == 'high_order', It sets the number of sequences with same shared subsequence
-    param_recurrent['task']['length_sequence'] = 6           # Number of elements per sequence
-    param_recurrent['task']['replace'] = False               # Random choice of characters with replacement
+param_recurrent['data_path']['data_root_path'] = 'experiments/data'
+param_recurrent['data_path']['project_name'] = 'clock_training'
+# param_recurrent['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
 
 # ========================================== REST ==========================================
 
@@ -424,10 +409,11 @@ param_readout['conn_dict_re'] = {'rule': 'all_to_all'}                      # Co
 # TODO
 # Simulation results such as spike times and connection weights are stored in clock_net/data/sequence_learning_performance/sequence_learning_and_prediction
 param_readout['data_path'] = {}
-param_readout['data_path']['data_root_path'] = 'data'
-param_readout['data_path']['project_name'] = 'sequence_learning_performance'
-param_readout['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
+param_readout['data_path']['data_root_path'] = 'experiments/data'
+param_readout['data_path']['project_name'] = 'sequence_training'
+# param_readout['data_path']['parameterspace_label'] = 'sequence_learning_and_prediction'
 param_readout['rnn_connections'] = '/Users/Jette/Desktop/results/NEST/job_3822329/1787e7674087ddd1d5749039f947a2cd/all_connections_42.npy'  # TODO
+param_readout['overwrite_files'] = True
 
 # ========================================== task parameters ==========================================
 # TODO

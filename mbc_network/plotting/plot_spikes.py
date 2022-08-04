@@ -5,9 +5,9 @@ from pickle import load
 
 import matplotlib.pyplot as plt
 import numpy as np
-from clock_net import plot_helper
-from clock_net import helper
-from clock_net.helper import load_data, load_spike_data
+from mbc_network.helper import plot_helper
+from mbc_network.helper import training_helper
+from mbc_network.helper.training_helper import load_data, load_spike_data
 
 
 def plot_spikes(ax=None):
@@ -21,11 +21,11 @@ def plot_spikes(ax=None):
     path_dict['parameterspace_label'] = 'sequence_learning_and_prediction'
 
     # get parameters
-    PS, PS_path = helper.get_parameter_set(path_dict)  # TODO remove helper.parameter_set_list() and fix data path
+    PS, PS_path = training_helper.get_parameter_set(path_dict)  # TODO remove helper.parameter_set_list() and fix data path
     replay = False
 
     # PS['DeltaT'] = 40.
-    PL = helper.parameter_set_list(PS)
+    PL = training_helper.parameter_set_list(PS)
     params = PL[0]
 
     # get trained sequences
@@ -42,9 +42,9 @@ def plot_spikes(ax=None):
 
     # get data path
     if replay:
-        data_path = helper.get_data_path(params['data_path'], params['label'], 'replay')
+        data_path = training_helper.get_data_path(params['data_path'], params['label'], 'replay')
     else:
-        data_path = helper.get_data_path(params['data_path'], params['label'])
+        data_path = training_helper.get_data_path(params['data_path'], params['label'])
 
     allspiketypes = True
     if not allspiketypes:

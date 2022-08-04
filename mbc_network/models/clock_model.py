@@ -22,12 +22,13 @@ from tqdm import tqdm
 from nest import voltage_trace
 import matplotlib.pyplot as plt
 from parameters import ParameterSpace
-from clock_net import plot_helper
+from mbc_network.helper import plot_helper
 from time import perf_counter
-from figures.plot_results import plot_2_mins_results
+from mbc_network.plotting.plot_results import plot_2_mins_results
 
-from clock_net import helper
+from mbc_network.helper import training_helper
 
+TWO_MIN = 2 * 60 * 1000
 
 class Model:
     """Instantiation of the Clock Network model and its PyNEST implementation.
@@ -42,7 +43,7 @@ class Model:
     In addition, each model may implement other model-specific member functions.
     """
 
-    def __init__(self, params: ParameterSpace, sequences: list, vocabulary: list):
+    def __init__(self, params: ParameterSpace):
         """Initialize model and simulation instance, including
 
         1) Parameter setting,
@@ -54,25 +55,19 @@ class Model:
         ----------
         params:     dict
                     Parameter dictionary
-        seuqences:  list
-                    Sequences to learn
-        vocabulary: list
-                    Vocabulary from which the sequences are constructed
         """
 
         print('\nInitialising model and simulation...')
 
         # Set parameters derived from base parameters
-        self.params = helper.derived_parameters(params)
+        self.params = training_helper.derived_parameters(params)
 
         # Data directory
-        if self.params['evaluate_replay']:
-            self.data_path = helper.get_data_path(self.params['data_path'], self.params['label'], 'replay')
-        else:
-            self.data_path = helper.get_data_path(self.params['data_path'], self.params['label'])
-        print(f"{self.params['label']=}")
-        print(f"{self.data_path=}")
+        self.data_path = training_helper.get_data_path(self.params['data_path'], self.params['label'])
+        print(f"Simulationlabel {self.params['label']} is generated based on parameter set...")
+        print(f"Generated data will be stored at {self.data_path}...")
 
+        # Set up data directory
         if nest.Rank() == 0:
             if self.data_path.is_dir():
                 message = "Directory already existed."
@@ -88,27 +83,19 @@ class Model:
         self.num_inh_neurons = params['num_inh_neurons']
         self.num_exc_clusters = params['num_exc_clusters']
 
-        # Initialize RNG
-        np.random.seed(self.params['seed'])
-        random.seed(self.params['seed'])
 
-        # Input stream: sequence data
-        self.sequences = sequences
-        self.vocabulary = vocabulary
-        self.length_sequence = len(self.sequences[0])  # TODO: possible that sequences do not have the same length?
-        self.num_sequences = len(self.sequences)
-
-        if params['task']['task_name'] != 'hard_coded':
-            assert self.length_sequences == params['task']['length_sequence']
-
-        if self.params['read_out_off'] is False:
+        if self.params['read_out_off'] is False:  # TODO need better solution for this
             self.random_dynamics_ex = None
             self.random_dynamics_ix = None
+
+        # Initialize RNG
+        np.random.seed(self.params['seed'])  # TODO do I need this for the sequence_model as well?
+        random.seed(self.params['seed'])
 
         # initialize the NEST kernel
         self.__setup_nest()
 
-    def __setup_nest(self):
+    def __setup_nest(self):  # TODO do I need this for the sequence_model as well?
         """Initializes the NEST kernel.
         """
 
@@ -218,40 +205,51 @@ class Model:
             if nest.Rank() == 0:
                 print('\nSimulating {} hour.'.format(1))
 
-            self.train_RNN(round_duration, normalization_time, initial_weight_inputs_dict)
+            self.simulate_sequential_input(round_duration, normalization_time, initial_weight_inputs_dict)
 
+            seq_input_iters = self.params['training_iterations']
             if self.params['random_dynamics']:
                 iterations = int(np.ceil(random_dynamics_time / 120000.0))
                 for i in range(iterations):
                     self.simulate_random_dynamics(120000.0, normalization_time, initial_weight_inputs_dict)
-                    sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
+                    sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(self.params['plotting_time'], normalization_time, initial_weight_inputs_dict)
 
-                    file_name = f"ee_connections_{30+i}.npy"
+                    file_name = f"ee_connections_{seq_input_iters+i}.npy"
                     self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
                     connectionsfilepath = os.path.join(self.data_path, file_name)
 
-                    file_name = f"all_connections_{30+i}.npy"
+                    file_name = f"all_connections_{seq_input_iters+i}.npy"
                     self.save_connections(fname=file_name)
                     allconnectionsfilepath = os.path.join(self.data_path, file_name)
 
                     spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
-                    spikefilepath = os.path.join(self.data_path, f"spikes_{30 + i}.pickle")
+                    spikefilepath = os.path.join(self.data_path, f"spikes_{seq_input_iters + i}.pickle")
                     dump(spikes, open(spikefilepath, "wb"))
 
                     # Plot and save plot of connection and spike behaviour as png and pickle file
-                    plotsfilepath = os.path.join(self.data_path, f"plots_{30 + i}")
+                    plotsfilepath = os.path.join(self.data_path, f"plots_{seq_input_iters + i}")
                     plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
 
-# TODO: rename to simulate_sequential dynamics?
-    def train_RNN(self, round_duration: int, normalization_time: int, initial_weight_inputs_dict: dict):
+    def simulate_sequential_input(self, round_duration: int, normalization_time: int, initial_weight_inputs_dict: dict):
+        """_summary_
 
+        Args:
+            round_duration (int): _description_
+            normalization_time (int): _description_
+            initial_weight_inputs_dict (dict): _description_
+        """ 
+
+        # the training is divided into training sessions where one training iteration lasts for 2 minutes, as in the original implementation
         training_iterations = self.params['training_iterations']
-        rounds = (-(-(2 * 60 * 1000) // int(round_duration)))  # 2 min / round_duration # TODO: int(np.ceil(2*60*1000/120))
+        rounds = int(np.ceil(TWO_MIN / round_duration))
+        plotting_time = self.params['plotting_time']
+
         for two_min_unit in tqdm(range(training_iterations)):
 
             for round_ in tqdm(range(rounds)):
 
-                esttime = ((round_ + (rounds * two_min_unit)) * (round_duration)) + two_min_unit * 3000.0
+                # Checking if the current time is correct with the estimated time
+                esttime = ((round_ + (rounds * two_min_unit)) * (round_duration)) + two_min_unit * plotting_time # TODO make this more clear
                 curtime = nest.biological_time
                 assert esttime == curtime
 
@@ -267,10 +265,6 @@ class Model:
                     nest.Run(remaining_time)
                     assert remaining_time < normalization_time
                 nest.Cleanup()
-
-                # print(f"{nest.GetStatus(self.spike_recorder_exc)=}")
-                # print(f"{nest.GetStatus(self.spike_recorder_inh)=}")
-                # print(f"{nest.GetStatus(self.spike_recorder_generator)=}")
 
                 # Turn off all spike recorders and set spike recorder for exc neurons to 'memory' to record spikes more flexible
                 if two_min_unit + round_ == 0:
@@ -288,12 +282,12 @@ class Model:
                 # Simulation is stopped to set a new reference time (origin) for start and stop of the generators, otherwise they would only spike at the beginning
                 if (round_ == (rounds - 1)) and two_min_unit < (training_iterations - 1):
                     for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
-                        generators_to_exc[0].origin += round_duration + 3000.0
-                        generators_to_exc[1].origin += round_duration + 3000.0
-                        generators_to_exc[2].origin += round_duration + 3000.0
-                        generators_to_exc[3].origin += round_duration + 3000.0
+                        generators_to_exc[0].origin += round_duration + plotting_time
+                        generators_to_exc[1].origin += round_duration + plotting_time
+                        generators_to_exc[2].origin += round_duration + plotting_time
+                        generators_to_exc[3].origin += round_duration + plotting_time
 
-                    self.external_node_to_inh_neuron.origin += round_duration + 3000.0
+                    self.external_node_to_inh_neuron.origin += round_duration + plotting_time
 
                 elif round_ < (rounds - 1):
                     for generators_to_exc in self.external_node_to_exc_neuron_dict.values():
@@ -309,13 +303,13 @@ class Model:
             self.save_connections(synapse_model=self.params['syn_dict_ee']['synapse_model'], fname=file_name)
             connectionsfilepath = os.path.join(self.data_path, file_name)
 
-            # Save all connections to plot spectrum
+            # Save all connections after two minutes to plot spectrum
             file_name = f"all_connections_{two_min_unit}.npy"
             self.save_connections(fname=file_name)
             allconnectionsfilepath = os.path.join(self.data_path, file_name)
 
             # Save current spike behaviour under random input dynamics
-            sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(3000.0, normalization_time, initial_weight_inputs_dict)
+            sr_times_exh, sr_senders_exh = self.record_exc_spike_behaviour(self.params['plotting_time'], normalization_time, initial_weight_inputs_dict)
             spikes = dict(sr_times_exh=sr_times_exh, sr_senders_exh=sr_senders_exh)
             spikefilepath = os.path.join(self.data_path, f"spikes_{two_min_unit}.pickle")
             dump(spikes, open(spikefilepath, "wb"))
@@ -325,6 +319,13 @@ class Model:
             plot_2_mins_results(spikefilepath, connectionsfilepath, allconnectionsfilepath, params=self.params, outfilename=plotsfilepath)
 
     def simulate_random_dynamics(self, sim_time: int, normalization_time: int, initial_weight_inputs: dict):
+        """_summary_
+
+        Args:
+            sim_time (int): _description_
+            normalization_time (int): _description_
+            initial_weight_inputs (dict): _description_
+        """
         # TODO save connections, spike rasters and spectra every 2 minutes
 
         if self.random_dynamics_ex is None or self.random_dynamics_ix is None:
@@ -357,6 +358,8 @@ class Model:
         assert (self.random_dynamics_ix.origin + sim_time) == nest.biological_time
 
     def record_behaviour_of_exc_connection(self):  # TODO: only for 1 round
+        """_summary_
+        """
         conn = nest.GetConnections(source=self.exc_neurons[31 - 1], target=self.exc_neurons[30:60], synapse_model='clopath_synapse')[2]
         print(f"{conn.target=}")
         sourceid = conn.source
@@ -371,16 +374,36 @@ class Model:
         nest.Connect(self.exc_neurons[sourceid - 1], self.exc_neurons[targetid - 1], syn_spec={'synapse_model': 'clopath_synapse_wr'})  # TODO: Will be ignored in save_connections
 
     def record_behaviour_of_inh_neuron(self, neuronid=None):  # TODO: make record duration more general
+        """_summary_
+
+        Args:
+            neuronid (_type_, optional): _description_. Defaults to None.
+        """
         if neuronid is not None:
             self.mm_inh = nest.Create('multimeter', params={'record_from': ['g_ex__X__spikeExc', 'g_in__X__spikeInh', 'V_m'], 'interval': 0.1, 'stop': 120.0})
             nest.Connect(self.mm_inh, self.inh_neurons[neuronid - 1])
 
     def record_behaviour_of_exc_neuron(self, neuronid=None):  # TODO: make record duration more general
+        """_summary_
+
+        Args:
+            neuronid (_type_, optional): _description_. Defaults to None.
+        """
         if neuronid is not None:
             self.mm_exc = nest.Create('multimeter', params={'record_from': ['g_ex', 'g_in', 'u_bar_bar', 'u_bar_minus', 'u_bar_plus', 'V_m', 'V_th', 'w'], 'interval': 0.1, 'stop': 120.0})
             nest.Connect(self.mm_exc, self.exc_neurons[neuronid - 1])
 
     def record_exc_spike_behaviour(self, sim_time: int, normalization_time: int, initial_weight_inputs: dict):  # TODO add a return (I have to different types of return..)
+        """_summary_
+
+        Args:
+            sim_time (int): _description_
+            normalization_time (int): _description_
+            initial_weight_inputs (dict): _description_
+
+        Returns:
+            _type_: _description_
+        """
 
         # TEST
         conn_ee_weights_before, conn_ei_weights_before = self.get_plastic_connections()
@@ -636,7 +659,7 @@ class Model:
         elif not os.path.exists(data_path):
             conn_path = os.path.join(data_path,f'{fname}.npy')
         else:
-            data_path = helper.get_data_path(self.params['data_path'], self.params['label'])
+            data_path = training_helper.get_data_path(self.params['data_path'], self.params['label'])
             conn_path = os.path.join(data_path,f'{fname}.npy')
         
         if os.path.exists(conn_path):
@@ -883,13 +906,13 @@ def load_input_encoding(path, fname):
     characters_to_subpopulations: dict
     """
 
-    characters_to_subpopulations = helper.load_data(path, fname)
+    characters_to_subpopulations = training_helper.load_data(path, fname)
 
     return characters_to_subpopulations
 
 
 if __name__ == '__main__':
-    import experiments.sequential_dynamics.parameters_space as parameters_space
+    import experiments.parameters_space as parameters_space
 
     class Pseudomodel:
         pass

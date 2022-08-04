@@ -2,7 +2,7 @@
 """
 
 import numpy as np
-from clock_net import plot_helper
+from mbc_network.helper import plot_helper
 
 # TODO: Plot in the end of simulation is missing
 

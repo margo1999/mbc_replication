@@ -20,7 +20,7 @@ import numpy as np
 
 
 ##########################################
-def generate_sequences(params, data_path, fname):
+def generate_sequences(params, data_path):
     """Generate sequence of elements using three methods:
     1. Higher order sequences: sequences with shared subsequences 'high_oder'
     2. Randomly drawn elements from a vocabulary 'random'
@@ -32,7 +32,6 @@ def generate_sequences(params, data_path, fname):
     params : dict
         dictionary contains task parameters
     data_path   : dict
-    fname       : str
 
     Returns
     -------
@@ -275,11 +274,11 @@ def get_data_path(pars, ps_label='', add_to_path=''):
     if "home" in pars:
         home = pars['home']
     else:
-        home = '../..'
+        # home = '../..'
+        home = '' # TODO
 
     data_path = Path(home, pars['data_root_path'],
                      pars['project_name'],
-                     pars['parameterspace_label'],
                      ps_label, add_to_path)
 
     return data_path
@@ -387,3 +386,14 @@ def load_data(path, fname):
         data = np.load(f'{path}/{fname}.npy', allow_pickle=True)
 
     return data
+
+
+def run_training(script_path: Path, parameter_set_idx: int):
+    """_summary_ TODO documentation
+
+    Args:
+        i (int): _description_
+    """
+    cmd = f"python3 {script_path} {parameter_set_idx}"
+    print(cmd)
+    os.system(cmd)

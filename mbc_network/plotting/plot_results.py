@@ -4,10 +4,10 @@ from pickle import dump
 
 import matplotlib.pyplot as plt
 
-import figures.plot_spectrum as plot_spectrum
-import figures.plot_spikes as plot_spikes
-import figures.plot_weight_distribution as plot_weight_distribution
-import figures.plot_weight_matrix as plot_weight_matrix
+import mbc_network.plotting.plot_spectrum as plot_spectrum
+import mbc_network.plotting.plot_spikes as plot_spikes
+import mbc_network.plotting.plot_weight_distribution as plot_weight_distribution
+import mbc_network.plotting.plot_weight_matrix as plot_weight_matrix
 
 
 def plot_results(outfilename: str = None):
