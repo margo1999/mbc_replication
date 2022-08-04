@@ -1,9 +1,9 @@
-name: clock_network
+name: mbc_replication
 channels:
   - conda-forge  
   #- defaults
 dependencies:
-  - python==3.8  
+  - python>=3.8  
   - pip  
   - matplotlib
   - numpy
