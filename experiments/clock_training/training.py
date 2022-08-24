@@ -52,14 +52,9 @@ def generate_reference_data():
     time_start = time.time()
 
     # ===========================================================
-    # specify sequences
-    # ===========================================================
-    sequences, _, vocabulary = training_helper.generate_sequences(params['task'], params['data_path'], params['label'])
-
-    # ===========================================================
     # create network
     # ===========================================================
-    model_instance = clock_model.Model(params, sequences, vocabulary)
+    model_instance = clock_model.Model(params)
     time_model = time.time()
 
     model_instance.create()
@@ -146,7 +141,7 @@ def generate_reference_data():
 if __name__ == '__main__':
     import matplotlib
     import matplotlib.pyplot as plt
-    from figures import plot_results
+    from mbc_network.plotting import plot_results
     matplotlib.use("Agg")
 
     resultpath = generate_reference_data()

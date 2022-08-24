@@ -886,8 +886,8 @@ def get_parameters():
         Parameter dictionary.
     """
 
-    import parameters_space
-    params = parameters_space.p
+    import experiments.parameters_space as parameters_space
+    params = parameters_space.param_recurrent
 
     return params
 
@@ -920,7 +920,7 @@ if __name__ == '__main__':
     nest.Install('nestmlmodule')
     model = Pseudomodel()
 
-    model.params = parameters_space.p
+    model.params = parameters_space.param_recurrent
 
     model.exc_neurons = nest.Create("aeif_cond_diff_exp_clopath", 240)
     model.inh_neurons = nest.Create("iaf_cond_diff_exp", 60)
