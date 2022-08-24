@@ -876,22 +876,6 @@ class Model:
         return self.exc_neurons[neurons_indices]
 
 
-##############################################
-def get_parameters():
-    """Import model-parameter file.
-
-    Returns
-    -------
-    params: dict
-        Parameter dictionary.
-    """
-
-    import experiments.parameters_space as parameters_space
-    params = parameters_space.param_recurrent
-
-    return params
-
-
 ###########################################
 def load_input_encoding(path, fname):
     """Load input encoding: association between sequence element and subpopulations

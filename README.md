@@ -59,7 +59,7 @@ The `mbc_replication` repository contains:
    python setup.py install
    ```
 1. Clone [NEST fork](https://github.com/margo1999/nest-simulator) (soon to be equivalent to NEST)
-   * checkout the branch `aeif_con_diff_exp_clopath` 
+   * checkout the branch `aeif_cond_diff_exp_clopath` 
    * build
    * install
 1. [Install NESTML](https://nestml.readthedocs.io/en/latest/installation.html)

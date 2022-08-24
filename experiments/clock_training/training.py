@@ -16,6 +16,7 @@ import numpy as np
 
 import mbc_network.models.clock_model as clock_model
 import mbc_network.helper.training_helper as training_helper
+from experiments.parameters_space import param_recurrent as paramspace_recurrent
 
 
 def generate_reference_data():
@@ -30,13 +31,9 @@ def generate_reference_data():
     # ===========================================================
     # nest.Install('../../module/nestml_active_dend_module')
 
-    # ===========================================================
-    # get network and training parameters
-    # ===========================================================
-    PS = clock_model.get_parameters()
-
-    # parameter-set id from command line (submission script)
-    PL = training_helper.parameter_set_list(PS)
+    # ===============================================================
+    # get parameter set
+    # ===============================================================
 
     task_id = 0
 
@@ -45,8 +42,9 @@ def generate_reference_data():
 
     parameterset_idx = task_id
 
-    params = PL[parameterset_idx]
-    resultpath = training_helper.get_data_path(params['data_path'], params['label'])
+    # parameter-set id from command line (submission script)
+    paramset_recurrent = training_helper.parameter_set_list(paramspace_recurrent)[parameterset_idx]  
+    resultpath = training_helper.get_data_path(paramset_recurrent['data_path'], paramset_recurrent['label'])
 
     # start time
     time_start = time.time()
@@ -54,7 +52,7 @@ def generate_reference_data():
     # ===========================================================
     # create network
     # ===========================================================
-    model_instance = clock_model.Model(params)
+    model_instance = clock_model.Model(paramset_recurrent)
     time_model = time.time()
 
     model_instance.create()
@@ -65,7 +63,7 @@ def generate_reference_data():
     # ===========================================================
     parameterspacepath = os.path.join(resultpath, 'parameter_space.txt')
     with open(parameterspacepath, 'wt') as file:
-        pprint(params, stream=file)
+        pprint(paramset_recurrent, stream=file)
         file.close()
 
     # TODO: Add time measurement
@@ -77,10 +75,10 @@ def generate_reference_data():
     time_connect = time.time()
 
     # store connections before learning
-    if params['store_connections']:
-        model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections_before')
-        if params['syn_dict_ei']['synapse_model'] != 'static_synapse':
-            model_instance.save_connections(synapse_model=params['syn_dict_ei']['synapse_model'], fname='ei_connections_before')  # TODO: better ask for source and target
+    if paramset_recurrent['store_connections']:
+        model_instance.save_connections(synapse_model=paramset_recurrent['syn_dict_ee']['synapse_model'], fname='ee_connections_before')
+        if paramset_recurrent['syn_dict_ei']['synapse_model'] != 'static_synapse':
+            model_instance.save_connections(synapse_model=paramset_recurrent['syn_dict_ei']['synapse_model'], fname='ei_connections_before')  # TODO: better ask for source and target
         model_instance.save_connections(fname='all_connections_before')
     time_store_connection_before = time.time()
 
@@ -91,10 +89,10 @@ def generate_reference_data():
     time_simulate = time.time()
 
     # store connections after learning
-    if params['store_connections']:
-        model_instance.save_connections(synapse_model=params['syn_dict_ee']['synapse_model'], fname='ee_connections')
-        if params['syn_dict_ei']['synapse_model'] != 'static_synapse':
-            model_instance.save_connections(synapse_model=params['syn_dict_ei']['synapse_model'], fname='ei_connections')  # TODO: better ask for source and target
+    if paramset_recurrent['store_connections']:
+        model_instance.save_connections(synapse_model=paramset_recurrent['syn_dict_ee']['synapse_model'], fname='ee_connections')
+        if paramset_recurrent['syn_dict_ei']['synapse_model'] != 'static_synapse':
+            model_instance.save_connections(synapse_model=paramset_recurrent['syn_dict_ei']['synapse_model'], fname='ei_connections')  # TODO: better ask for source and target
         model_instance.save_connections(fname='all_connections')
     time_store_connection_after = time.time()
 
